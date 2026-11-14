@@ -1,0 +1,36 @@
+{
+  "scenario": "udp-ping-pong",
+  "client": "java",
+  "variant": "concurrent-offer-32",
+  "config": {
+    "aeron_dir": "/dev/shm/luas-benchmarks",
+    "channel": "aeron:udp?endpoint=127.0.0.1:20121",
+    "stream_id": 1001,
+    "pong_stream_id": 1002,
+    "message_length": 32,
+    "messages": 1000000,
+    "warmup_messages": 100000,
+    "fragment_limit": 1,
+    "publication": "concurrent",
+    "send_method": "offer",
+    "cpus": [
+      6,
+      7
+    ]
+  },
+  "latency": {
+    "count": 1000000,
+    "p50_ns": 8903,
+    "p90_ns": 9607,
+    "p99_ns": 11807,
+    "p99_9_ns": 22015,
+    "p99_99_ns": 22015,
+    "p99_999_ns": 22015,
+    "max_ns": 210047,
+    "histogram": "HISTFAAAAD942pJpmSzMwMAgzgABzFCakYGB2c1gxwIG+w8QgfWOB1ps1zI2vDJYzLLgH9dWvnlzGPtNmAABAAD//zcGDi0="
+  },
+  "jvm_runtime": {
+    "gc_count": 0,
+    "gc_time_ms": 0
+  }
+}

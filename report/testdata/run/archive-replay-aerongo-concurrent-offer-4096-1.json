@@ -1,0 +1,34 @@
+{
+  "scenario": "archive-replay",
+  "client": "aerongo",
+  "variant": "concurrent-offer-4096",
+  "config": {
+    "aeron_dir": "/dev/shm/luas-benchmarks",
+    "channel": "aeron:ipc",
+    "stream_id": 1001,
+    "pong_stream_id": 1002,
+    "message_length": 4096,
+    "messages": 262144,
+    "warmup_messages": 26214,
+    "fragment_limit": 10,
+    "publication": "concurrent",
+    "send_method": "offer",
+    "cpus": [
+      6,
+      7
+    ]
+  },
+  "throughput": {
+    "messages": 262144,
+    "bytes": 1073741824,
+    "elapsed_ns": 291271111,
+    "messages_per_second": 900000.0,
+    "megabytes_per_second": 3686.4
+  },
+  "go_runtime": {
+    "allocations": 40,
+    "allocations_per_message": 0.000152588,
+    "gc_cycles": 0,
+    "gc_pause_ns": 0
+  }
+}

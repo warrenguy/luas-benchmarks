@@ -1,0 +1,207 @@
+#!/usr/bin/env bash
+# Start the driver and the Java archive. Run the connect check and every
+# scenario of every client with small counts. Each cluster-ping-pong case
+# starts a Java cluster of the member count it names and stops it after the
+# last client. Stop the archive and the driver. Each scenario run must
+# deliver every message and write result JSON that names the scenario, the
+# client and the message count in each count field of the case. Every
+# client of a case must report the same config and variant. A result file
+# must hold only the fields that the Go result type names. The smoke run
+# does not assert timing.
+# Usage: scripts/smoke [scenario ...]
+# With no scenario, run every case. Otherwise run the cases of the named
+# scenarios. The connect checks always run.
+# Exits non-zero when any case fails.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# The client driver must load scripts/aeronmd.properties and log to
+# build/aeronmd.log.
+unset DRIVER_PROPERTIES DRIVER_LOG
+CLIENT_TIMEOUT=60s
+JAVA_FLAGS=(
+	-XX:+UnlockExperimentalVMOptions -XX:+TrustFinalNonStaticFields
+	-XX:+UseParallelGC
+	-Dagrona.disable.bounds.checks=true
+	--add-opens java.base/jdk.internal.misc=ALL-UNNAMED
+)
+MESSAGES=2000
+WARMUP_MESSAGES=200
+# A cluster round trip passes through consensus. Cluster cases run fewer
+# messages to stay inside CLIENT_TIMEOUT.
+CLUSTER_MESSAGES=500
+RESULT_DIR="${ROOT}/build/smoke"
+
+CLIENTS=(luas java aerongo)
+
+# Each case: scenario, comma list of result fields that hold the message
+# count, extra flags.
+CASES=(
+	"ipc-throughput throughput.messages"
+	"ipc-throughput throughput.messages -publication exclusive -send-method try-claim"
+	"ipc-throughput throughput.messages -message-length 4096"
+	"ipc-throughput throughput.messages -message-length 16384"
+	"ipc-throughput throughput.messages -publication exclusive -message-length 65536"
+	"udp-throughput throughput.messages"
+	"udp-throughput throughput.messages -publication exclusive -send-method try-claim -message-length 1024"
+	"udp-throughput throughput.messages -publication exclusive -message-length 4096"
+	"udp-throughput throughput.messages -message-length 16384"
+	"ipc-ping-pong latency.count"
+	"ipc-ping-pong latency.count -publication exclusive -send-method try-claim"
+	"udp-ping-pong latency.count"
+	"ipc-fixed-rate latency.count,fixed_rate.sent,fixed_rate.received -rate 100000"
+	"udp-fixed-rate latency.count,fixed_rate.sent,fixed_rate.received -rate 100000 -publication exclusive -send-method try-claim"
+	"archive-record throughput.messages"
+	"archive-record throughput.messages -message-length 4096"
+	"archive-replay throughput.messages"
+	"archive-replay throughput.messages -message-length 4096"
+	"cluster-ping-pong latency.count -cluster-members 1"
+	"cluster-ping-pong latency.count -cluster-members 3 -publication exclusive -message-length 1024"
+)
+
+known_scenarios=" "
+for entry in "${CASES[@]}"; do
+	known_scenarios+="${entry%% *} "
+done
+for scenario in "$@"; do
+	if [[ "${known_scenarios}" != *" ${scenario} "* ]]; then
+		echo "smoke: unknown scenario ${scenario}" >&2
+		exit 2
+	fi
+done
+
+command -v jq >/dev/null || {
+	echo "smoke: jq not found" >&2
+	exit 1
+}
+
+"${ROOT}/scripts/driver" start
+trap '"${ROOT}/scripts/cluster" stop; "${ROOT}/scripts/archive" stop; "${ROOT}/scripts/driver" stop' EXIT
+trap 'exit 1' INT TERM
+"${ROOT}/scripts/archive" start
+rm -rf "${RESULT_DIR}"
+mkdir -p "${RESULT_DIR}"
+
+failed=()
+case_index=0
+
+# run_client runs client $1 with the remaining arguments under
+# CLIENT_TIMEOUT.
+run_client() {
+	local client="$1"
+	shift
+	case "${client}" in
+	luas) timeout "${CLIENT_TIMEOUT}" "${ROOT}/build/luas" "$@" ;;
+	java) timeout "${CLIENT_TIMEOUT}" java "${JAVA_FLAGS[@]}" -jar "${ROOT}/target/bench.jar" "$@" ;;
+	aerongo) timeout "${CLIENT_TIMEOUT}" "${ROOT}/build/aerongo" "$@" ;;
+	esac
+}
+
+# run_connect runs the connect check of one client.
+run_connect() {
+	local client="$1"
+	echo "smoke: ${client} connect"
+	if ! run_client "${client}" connect; then
+		failed+=("${client} connect")
+	fi
+}
+
+# run_case runs one scenario case on one client and checks its result JSON.
+run_case() {
+	local client="$1" scenario="$2" count_fields="$3" field
+	shift 3
+	local name="${scenario}${*:+ $*}"
+	local messages="${MESSAGES}"
+	if [[ "${scenario}" == cluster-ping-pong ]]; then
+		messages="${CLUSTER_MESSAGES}"
+	fi
+	local output="${RESULT_DIR}/${case_index}-${client}-${scenario}.json"
+	case_index=$((case_index + 1))
+	case_outputs+=("${output}")
+	echo "smoke: ${client} ${name}"
+	if ! run_client "${client}" "${scenario}" \
+		-messages "${messages}" -warmup-messages "${WARMUP_MESSAGES}" \
+		-output "${output}" "$@"; then
+		failed+=("${client} ${name}")
+		return
+	fi
+	local check=".scenario == \$scenario and .client == \$client"
+	local -a names
+	IFS=, read -ra names <<<"${count_fields}"
+	for field in "${names[@]}"; do
+		check+=" and .${field} == \$messages"
+	done
+	if ! jq -e --arg scenario "${scenario}" --arg client "${client}" \
+		--argjson messages "${messages}" "${check}" "${output}" >/dev/null; then
+		echo "smoke: ${client} ${name}: result JSON does not parse or does not match" >&2
+		failed+=("${client} ${name}")
+	fi
+}
+
+# cluster_members prints the value of -cluster-members in the flags $@, or
+# 1 when the flags do not name one.
+cluster_members() {
+	local members=1
+	while (($# > 0)); do
+		if [[ "$1" == -cluster-members && $# -gt 1 ]]; then
+			members="$2"
+		fi
+		shift
+	done
+	echo "${members}"
+}
+
+# check_fairness fails case $1 when the result files in case_outputs differ
+# in config or variant. A missing result file already failed the case.
+check_fairness() {
+	local name="$1" output settings first=""
+	for output in "${case_outputs[@]}"; do
+		settings="$(jq -c '[.config, .variant]' "${output}" 2>/dev/null)" || return 0
+		if [[ -z "${first}" ]]; then
+			first="${settings}"
+		elif [[ "${settings}" != "${first}" ]]; then
+			echo "smoke: ${name}: clients report different config or variant" >&2
+			failed+=("fairness ${name}")
+			return
+		fi
+	done
+}
+
+for client in "${CLIENTS[@]}"; do
+	run_connect "${client}"
+done
+
+for entry in "${CASES[@]}"; do
+	read -ra fields <<<"${entry}"
+	if (($# > 0)) && [[ " $* " != *" ${fields[0]} "* ]]; then
+		continue
+	fi
+	name="${fields[0]}${fields[2]:+ ${fields[*]:2}}"
+	is_cluster=false
+	if [[ "${fields[0]}" == cluster-ping-pong ]]; then
+		is_cluster=true
+		if ! "${ROOT}/scripts/cluster" start "$(cluster_members "${fields[@]:2}")"; then
+			failed+=("cluster ${name}")
+			continue
+		fi
+	fi
+	case_outputs=()
+	for client in "${CLIENTS[@]}"; do
+		run_case "${client}" "${fields[@]}"
+	done
+	check_fairness "${name}"
+	if "${is_cluster}"; then
+		"${ROOT}/scripts/cluster" stop
+	fi
+done
+
+# A result field that the Go result type does not name fails the run.
+if ! (cd "${ROOT}" && go run ./report -check "${RESULT_DIR}"/*.json); then
+	failed+=("result fields")
+fi
+
+if ((${#failed[@]} > 0)); then
+	printf 'smoke: failed: %s\n' "${failed[@]}" >&2
+	exit 1
+fi
+echo "smoke: every client passed every case"

@@ -1,0 +1,32 @@
+{
+  "scenario": "ipc-throughput",
+  "client": "java",
+  "variant": "concurrent-offer-16384",
+  "config": {
+    "aeron_dir": "/dev/shm/luas-benchmarks",
+    "channel": "aeron:ipc",
+    "stream_id": 1001,
+    "pong_stream_id": 1002,
+    "message_length": 16384,
+    "messages": 1000000,
+    "warmup_messages": 100000,
+    "fragment_limit": 10,
+    "publication": "concurrent",
+    "send_method": "offer",
+    "cpus": [
+      6,
+      7
+    ]
+  },
+  "throughput": {
+    "messages": 1000000,
+    "bytes": 16384000000,
+    "elapsed_ns": 2380952380,
+    "messages_per_second": 420000,
+    "megabytes_per_second": 6881.28
+  },
+  "jvm_runtime": {
+    "gc_count": 0,
+    "gc_time_ms": 0
+  }
+}

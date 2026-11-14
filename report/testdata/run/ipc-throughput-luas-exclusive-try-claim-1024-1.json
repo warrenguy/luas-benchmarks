@@ -1,0 +1,34 @@
+{
+  "scenario": "ipc-throughput",
+  "client": "luas",
+  "variant": "exclusive-try-claim-1024",
+  "config": {
+    "aeron_dir": "/dev/shm/luas-benchmarks",
+    "channel": "aeron:ipc",
+    "stream_id": 1001,
+    "pong_stream_id": 1002,
+    "message_length": 1024,
+    "messages": 1000000,
+    "warmup_messages": 100000,
+    "fragment_limit": 10,
+    "publication": "exclusive",
+    "send_method": "try-claim",
+    "cpus": [
+      6,
+      7
+    ]
+  },
+  "throughput": {
+    "messages": 1000000,
+    "bytes": 1024000000,
+    "elapsed_ns": 243902439,
+    "messages_per_second": 4100000,
+    "megabytes_per_second": 4198.4
+  },
+  "go_runtime": {
+    "allocations": 12,
+    "allocations_per_message": 0.000012,
+    "gc_cycles": 0,
+    "gc_pause_ns": 0
+  }
+}

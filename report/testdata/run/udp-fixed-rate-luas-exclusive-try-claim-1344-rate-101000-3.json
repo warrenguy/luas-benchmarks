@@ -1,0 +1,43 @@
+{
+  "scenario": "udp-fixed-rate",
+  "client": "luas",
+  "variant": "exclusive-try-claim-1344-rate-101000",
+  "config": {
+    "aeron_dir": "/dev/shm/luas-benchmarks",
+    "channel": "aeron:udp?endpoint=127.0.0.1:20121",
+    "stream_id": 1001,
+    "pong_stream_id": 1002,
+    "message_length": 1344,
+    "messages": 600,
+    "warmup_messages": 100,
+    "fragment_limit": 10,
+    "publication": "exclusive",
+    "send_method": "try-claim",
+    "rate": 101000,
+    "warmup_rate": 25000,
+    "cpus": [
+      6,
+      7
+    ]
+  },
+  "latency": {
+    "count": 600,
+    "p50_ns": 11799,
+    "p90_ns": 13703,
+    "p99_ns": 187775,
+    "p99_9_ns": 227327,
+    "max_ns": 227327
+  },
+  "fixed_rate": {
+    "expected": 600,
+    "sent": 600,
+    "received": 600,
+    "histogram": "HISTFAAAAUZ42jSRoW4cQRBEe1/X9M7mYGho0JHQgOikgLCgfEAUcCCKgvwLJpahsXWmBkYmJpa/wOCgP8Dcf2Cre9YjrUYzVV1bVfPp9OKjGTsby9d9MvMfX+6ubPcyLo7fwcIFPZBk+QWATIYJqSMMydVkYpNnNOMgRwhPKpZDkHtLCjBTaiaR9OjFiiGdk4mWeg4nWa6Yk1QXyIcP1GvCSkzkJRYlhhFpl/KRy8SC9YpSM4rxuwEGBIMpQ+NgZdqGsuiRgcucMmiaS13i3ZQaLcEY8dL+8CXDRSsvJe3Z65opa+ihLBtCToMoJdbunVD1Vc/hUUY9s3WyH+ij7Ui4kMSjpTQru97AEqSJ7lx/4LDhaeJ84jCxcOs8pqn7iQfnG1sW/nLmfOaEP/zjK6/OJRwnboA9C3u2/GLmPz/5zfPEWwAAAP//iUIbAw=="
+  },
+  "go_runtime": {
+    "allocations": 0,
+    "allocations_per_message": 0,
+    "gc_cycles": 0,
+    "gc_pause_ns": 0
+  }
+}

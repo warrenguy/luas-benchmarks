@@ -1,0 +1,41 @@
+{
+  "scenario": "ipc-fixed-rate",
+  "client": "java",
+  "variant": "exclusive-try-claim-32-rate-501000",
+  "config": {
+    "aeron_dir": "/dev/shm/luas-benchmarks",
+    "channel": "aeron:ipc",
+    "stream_id": 1001,
+    "pong_stream_id": 1002,
+    "message_length": 32,
+    "messages": 600,
+    "warmup_messages": 100,
+    "fragment_limit": 10,
+    "publication": "exclusive",
+    "send_method": "try-claim",
+    "rate": 501000,
+    "warmup_rate": 25000,
+    "cpus": [
+      6,
+      7
+    ]
+  },
+  "latency": {
+    "count": 600,
+    "p50_ns": 464,
+    "p90_ns": 548,
+    "p99_ns": 8535,
+    "p99_9_ns": 10455,
+    "max_ns": 10455
+  },
+  "fixed_rate": {
+    "expected": 600,
+    "sent": 600,
+    "received": 600,
+    "histogram": "HISTFAAAAOJ42izNIUqEURTF8fv+3/F4fTw/hm+wCSYxCVaTWGyTREziQgwWd+AG3MI0JxiNBoNBXMFgcQfKY7zlwrk/zt1/eJxHlN3YzPC/S8RwcfL8FGc/m+B7y5Zt55iyxZSWqJYHHJVsTHJVqrYWblK1lTk2O9StXXHKGZmZdZoRasqZ6bWdd9A7ob8SEgplU2VSJRUzahW1hZisrnG6ZW/vXi2poyGV4/g1sNzmmI/COlnDO6wKq4FrzmHRo5eB18JnYYcFhxxxx29hXZjzVvrpilvuOeWAPS65YVn4CwAA//+MCRya"
+  },
+  "jvm_runtime": {
+    "gc_count": 0,
+    "gc_time_ms": 0
+  }
+}

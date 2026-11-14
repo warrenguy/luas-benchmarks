@@ -1,0 +1,133 @@
+#!/usr/bin/env bash
+# Start or stop the Java archive on the running driver with
+# scripts/archive.properties.
+# Usage: scripts/archive start | stop
+# AERON_DIR names the driver directory under /dev/shm. The archive directory
+# is AERON_DIR with an -archive suffix. stop removes it. SERVER_CPUS, a comma
+# list, pins the archive thread to its first CPU. Unset leaves it unpinned.
+# start writes the archive log to build/archive.log. start needs
+# target/bench.jar.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+: "${AERON_DIR:?AERON_DIR required}"
+AERON_DIR="$(realpath -m -- "${AERON_DIR}")"
+if [[ "${AERON_DIR}" != /dev/shm/?* ]]; then
+	echo "archive: AERON_DIR ${AERON_DIR}: want a directory under /dev/shm" >&2
+	exit 1
+fi
+ARCHIVE_DIR="${AERON_DIR}-archive"
+PID_FILE="${ARCHIVE_DIR}.pid"
+LOG_FILE="${ROOT}/build/archive.log"
+JAR="${ROOT}/target/bench.jar"
+JAVA_FLAGS=(
+	-XX:+UnlockExperimentalVMOptions -XX:+TrustFinalNonStaticFields
+	-XX:+UseParallelGC
+	-Dagrona.disable.bounds.checks=true
+	-Daeron.pre.touch.mapped.memory=true
+	--add-opens java.base/jdk.internal.misc=ALL-UNNAMED
+)
+MAIN_CLASS=bench.ArchiveServer
+ARCHIVE_THREADS=1
+IFS=, read -ra SERVER_CPUS_LIST <<<"${SERVER_CPUS:-}"
+START_TIMEOUT_TICKS=300
+STOP_TIMEOUT_TICKS=100
+
+# archive_pid prints the PID in PID_FILE when that process is the archive on
+# ARCHIVE_DIR. Returns non-zero when PID_FILE is missing or names another
+# process.
+archive_pid() {
+	[[ -f "${PID_FILE}" ]] || return 1
+	local pid
+	pid="$(<"${PID_FILE}")"
+	grep -qzxF -- "${MAIN_CLASS}" "/proc/${pid}/cmdline" 2>/dev/null || return 1
+	grep -qzxF -- "-Daeron.archive.dir=${ARCHIVE_DIR}" "/proc/${pid}/cmdline" 2>/dev/null || return 1
+	echo "${pid}"
+}
+
+start() {
+	local pid child
+	if pid="$(archive_pid)"; then
+		echo "archive: already running: pid ${pid}" >&2
+		exit 1
+	fi
+	if [[ -f "${PID_FILE}" ]]; then
+		stop
+	fi
+	if [[ ! -f "${JAR}" ]]; then
+		echo "archive: ${JAR} missing: run make build-java" >&2
+		exit 1
+	fi
+	if [[ ! -e "${AERON_DIR}/cnc.dat" ]]; then
+		echo "archive: no driver in ${AERON_DIR}: run scripts/driver start" >&2
+		exit 1
+	fi
+	if ((${#SERVER_CPUS_LIST[@]} > 0 && ${#SERVER_CPUS_LIST[@]} < ARCHIVE_THREADS)); then
+		echo "archive: SERVER_CPUS ${SERVER_CPUS}: want ${ARCHIVE_THREADS} cpu" >&2
+		exit 2
+	fi
+	java_defines=()
+	if ((${#SERVER_CPUS_LIST[@]} > 0)); then
+		java_defines=("-Dbench.server.cpus=$(IFS=,; echo "${SERVER_CPUS_LIST[*]:0:ARCHIVE_THREADS}")")
+	fi
+	mkdir -p "$(dirname "${LOG_FILE}")"
+	# Clear the log before the launch. The ready check must not match the
+	# ready line of an earlier archive.
+	: >"${LOG_FILE}"
+	java "${JAVA_FLAGS[@]}" "${java_defines[@]}" "-Daeron.dir=${AERON_DIR}" "-Daeron.archive.dir=${ARCHIVE_DIR}" \
+		-cp "${JAR}" "${MAIN_CLASS}" "${ROOT}/scripts/archive.properties" >"${LOG_FILE}" 2>&1 &
+	child="$!"
+	echo "${child}" >"${PID_FILE}"
+	for ((tick = 0; tick < START_TIMEOUT_TICKS; tick++)); do
+		if grep -q '^archive: ready' "${LOG_FILE}"; then
+			echo "archive: started: pid ${child}, dir ${ARCHIVE_DIR}"
+			return
+		fi
+		if ! kill -0 "${child}" 2>/dev/null; then
+			echo "archive: java exited at start; log follows" >&2
+			cat "${LOG_FILE}" >&2
+			rm -f "${PID_FILE}"
+			rm -rf "${ARCHIVE_DIR}"
+			exit 1
+		fi
+		sleep 0.1
+	done
+	echo "archive: not ready after 30s; log follows" >&2
+	cat "${LOG_FILE}" >&2
+	stop
+	exit 1
+}
+
+stop() {
+	if [[ ! -f "${PID_FILE}" ]]; then
+		return
+	fi
+	local pid
+	if ! pid="$(archive_pid)"; then
+		echo "archive: stale pid file ${PID_FILE}: removed" >&2
+		rm -f "${PID_FILE}"
+		rm -rf "${ARCHIVE_DIR}"
+		return
+	fi
+	kill -TERM "${pid}" 2>/dev/null || true
+	for ((tick = 0; tick < STOP_TIMEOUT_TICKS; tick++)); do
+		archive_pid >/dev/null || break
+		sleep 0.1
+	done
+	if archive_pid >/dev/null; then
+		echo "archive: pid ${pid} still running after 10s; sending SIGKILL" >&2
+		kill -KILL "${pid}" 2>/dev/null || true
+	fi
+	rm -f "${PID_FILE}"
+	rm -rf "${ARCHIVE_DIR}"
+	echo "archive: stopped: pid ${pid}"
+}
+
+case "${1:-}" in
+start) start ;;
+stop) stop ;;
+*)
+	echo "usage: scripts/archive start | stop" >&2
+	exit 2
+	;;
+esac

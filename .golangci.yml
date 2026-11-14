@@ -1,0 +1,73 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+formatters:
+  enable:
+    - goimports
+    - gofumpt
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/warrenguy/luas-benchmarks
+    gofumpt:
+      extra:
+        group-params: true
+        clothe-returns: true
+        balance-calls: true
+      module-path: github.com/warrenguy/luas-benchmarks
+
+linters:
+  default: standard
+  enable:
+    - exhaustive
+    - gosec
+    - lll
+    - testifylint
+  settings:
+    lll:
+      line-length: 100
+    staticcheck:
+      checks:
+        - all
+        - -ST1020
+        - -ST1021
+  exclusions:
+    rules:
+      - path: '_test\.go$'
+        linters:
+          - exhaustive
+      # Tests handle no untrusted input.
+      - path: '_test\.go$'
+        linters:
+          - gosec
+      # These packages open the paths their callers supply.
+      - path: '^(bench|cells|report)/'
+        linters:
+          - gosec
+        text: 'G304:'
+      # Result files are public output.
+      - path: '^bench/result\.go$'
+        linters:
+          - gosec
+        text: 'G306:'
+      # CurrentCPU makes a raw getcpu system call.
+      - path: '^bench/repin\.go$'
+        linters:
+          - gosec
+        text: 'G103:'
+      # Messages carry int64 values as their uint64 bit pattern.
+      - path: '^luas/'
+        linters:
+          - gosec
+        text: 'G115:'
+      # The record command runs the version commands of the toolchains.
+      - path: '^report/record/'
+        linters:
+          - gosec
+        text: 'G204:'
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

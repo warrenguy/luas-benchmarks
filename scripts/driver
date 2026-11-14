@@ -1,0 +1,125 @@
+#!/usr/bin/env bash
+# Start or stop aeronmd with scripts/aeronmd.properties.
+# Usage: scripts/driver start [-Dname=value ...] | stop
+# start passes each -Dname=value to aeronmd. aeronmd loads the properties
+# file after the defines, so a file property wins over a define of the same
+# name. AERONMD names the driver binary. AERON_DIR names the driver directory
+# under /dev/shm. start writes the driver log to build/aeronmd.log.
+# DRIVER_PROPERTIES and DRIVER_LOG replace the properties file and the log.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+: "${AERONMD:?AERONMD required}"
+: "${AERON_DIR:?AERON_DIR required}"
+AERON_DIR="$(realpath -m -- "${AERON_DIR}")"
+if [[ "${AERON_DIR}" != /dev/shm/?* ]]; then
+	echo "driver: AERON_DIR ${AERON_DIR}: want a directory under /dev/shm" >&2
+	exit 1
+fi
+PID_FILE="${AERON_DIR}.pid"
+LOG_FILE="${DRIVER_LOG:-${ROOT}/build/aeronmd.log}"
+PROPERTIES="${DRIVER_PROPERTIES:-${ROOT}/scripts/aeronmd.properties}"
+START_TIMEOUT_TICKS=100
+STOP_TIMEOUT_TICKS=100
+
+# driver_pid prints the PID in PID_FILE when that process is an aeronmd on
+# AERON_DIR. Any aeronmd binary matches, so a driver from another AERONMD
+# still counts. Returns non-zero when PID_FILE is missing or names another
+# process.
+driver_pid() {
+	[[ -f "${PID_FILE}" ]] || return 1
+	local pid exe
+	pid="$(<"${PID_FILE}")"
+	exe="$(readlink -- "/proc/${pid}/exe" 2>/dev/null)" || return 1
+	exe="${exe% (deleted)}"
+	[[ "${exe##*/}" == aeronmd ]] || return 1
+	grep -qzxF -- "-Daeron.dir=${AERON_DIR}" "/proc/${pid}/cmdline" 2>/dev/null || return 1
+	echo "${pid}"
+}
+
+# cnc_version prints the CnC version word of cnc.dat.
+# Does not print anything while cnc.dat is missing or empty.
+cnc_version() {
+	local version
+	version="$(od -An -tu4 -N4 -- "${AERON_DIR}/cnc.dat" 2>/dev/null)" || return 0
+	echo "${version//[[:space:]]/}"
+}
+
+start() {
+	local pid child version
+	if pid="$(driver_pid)"; then
+		echo "driver: already running: pid ${pid}" >&2
+		exit 1
+	fi
+	if [[ -f "${PID_FILE}" ]]; then
+		stop
+	elif [[ -e "${AERON_DIR}/cnc.dat" ]]; then
+		echo "driver: ${AERON_DIR}/cnc.dat exists without ${PID_FILE}; stop that driver or remove ${AERON_DIR}" >&2
+		exit 1
+	fi
+	mkdir -p "$(dirname "${LOG_FILE}")"
+	"${AERONMD}" "-Daeron.dir=${AERON_DIR}" "$@" "${PROPERTIES}" \
+		>"${LOG_FILE}" 2>&1 &
+	child="$!"
+	echo "${child}" >"${PID_FILE}"
+	for ((tick = 0; tick < START_TIMEOUT_TICKS; tick++)); do
+		version="$(cnc_version)"
+		if [[ -n "${version}" && "${version}" != 0 ]]; then
+			echo "driver: started: pid ${child}, dir ${AERON_DIR}"
+			return
+		fi
+		if ! kill -0 "${child}" 2>/dev/null; then
+			echo "driver: aeronmd exited at start; log follows" >&2
+			cat "${LOG_FILE}" >&2
+			rm -f "${PID_FILE}"
+			exit 1
+		fi
+		sleep 0.1
+	done
+	echo "driver: no CnC version in ${AERON_DIR}/cnc.dat after 10s" >&2
+	stop
+	exit 1
+}
+
+stop() {
+	if [[ ! -f "${PID_FILE}" ]]; then
+		return
+	fi
+	local pid
+	if ! pid="$(driver_pid)"; then
+		echo "driver: stale pid file ${PID_FILE}: removed" >&2
+		rm -f "${PID_FILE}"
+		rm -rf "${AERON_DIR}"
+		return
+	fi
+	kill -TERM "${pid}" 2>/dev/null || true
+	for ((tick = 0; tick < STOP_TIMEOUT_TICKS; tick++)); do
+		driver_pid >/dev/null || break
+		sleep 0.1
+	done
+	if driver_pid >/dev/null; then
+		echo "driver: pid ${pid} still running after 10s; sending SIGKILL" >&2
+		kill -KILL "${pid}" 2>/dev/null || true
+	fi
+	rm -f "${PID_FILE}"
+	rm -rf "${AERON_DIR}"
+	echo "driver: stopped: pid ${pid}"
+}
+
+case "${1:-}" in
+start)
+	shift
+	for define in "$@"; do
+		if [[ "${define}" != -D?*=* ]]; then
+			echo "driver: argument ${define}: want -Dname=value" >&2
+			exit 2
+		fi
+	done
+	start "$@"
+	;;
+stop) stop ;;
+*)
+	echo "usage: scripts/driver start [-Dname=value ...] | stop" >&2
+	exit 2
+	;;
+esac

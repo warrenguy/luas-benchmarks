@@ -1,0 +1,188 @@
+#!/usr/bin/env bash
+# Start or stop a Java cluster with scripts/cluster.properties.
+# Usage: scripts/cluster start <members> | stop
+# Member i runs bench.ClusterServer on its own aeronmd with
+# scripts/cluster-aeronmd.properties. AERON_DIR names the client driver
+# directory under /dev/shm. Member i keeps its driver directory at
+# AERON_DIR-member-i and its archive and cluster directories under
+# AERON_DIR-member-i-data. stop removes them. SERVER_CPUS, a comma list, pins
+# the threads of member i to its CPUs 4i to 4i+3: driver, archive, consensus
+# module, service. Unset leaves them unpinned. start writes the log of member
+# i to build/cluster-i.log, and its driver log to build/cluster-aeronmd-i.log. start returns once every
+# member reports the end of the first election. start and stop
+# need AERONMD. start also needs target/bench.jar.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+: "${AERONMD:?AERONMD required}"
+: "${AERON_DIR:?AERON_DIR required}"
+AERON_DIR="$(realpath -m -- "${AERON_DIR}")"
+if [[ "${AERON_DIR}" != /dev/shm/?* ]]; then
+	echo "cluster: AERON_DIR ${AERON_DIR}: want a directory under /dev/shm" >&2
+	exit 1
+fi
+JAR="${ROOT}/target/bench.jar"
+JAVA_FLAGS=(
+	-XX:+UnlockExperimentalVMOptions -XX:+TrustFinalNonStaticFields
+	-XX:+UseParallelGC
+	-Dagrona.disable.bounds.checks=true
+	-Daeron.pre.touch.mapped.memory=true
+	--add-opens java.base/jdk.internal.misc=ALL-UNNAMED
+)
+MAIN_CLASS=bench.ClusterServer
+MAX_MEMBERS=9
+MEMBER_THREADS=4
+IFS=, read -ra SERVER_CPUS_LIST <<<"${SERVER_CPUS:-}"
+START_TIMEOUT_TICKS=600
+STOP_TIMEOUT_TICKS=100
+
+# member_dir prints the driver directory of member $1.
+member_dir() {
+	echo "${AERON_DIR}-member-$1"
+}
+
+# member_log prints the ClusterServer log of member $1.
+member_log() {
+	echo "${ROOT}/build/cluster-$1.log"
+}
+
+# member_pid prints the PID in the PID file of member $1 when that process
+# is the ClusterServer of member $1. Returns non-zero when the PID file is
+# missing or names another process.
+member_pid() {
+	local data_dir pid
+	data_dir="$(member_dir "$1")-data"
+	[[ -f "${data_dir}.pid" ]] || return 1
+	pid="$(<"${data_dir}.pid")"
+	grep -qzxF -- "${MAIN_CLASS}" "/proc/${pid}/cmdline" 2>/dev/null || return 1
+	grep -qzxF -- "-Daeron.cluster.dir=${data_dir}/cluster" "/proc/${pid}/cmdline" 2>/dev/null || return 1
+	echo "${pid}"
+}
+
+# has_member returns zero when member $1 left a PID file or a directory.
+has_member() {
+	local dir
+	dir="$(member_dir "$1")"
+	[[ -e "${dir}" || -e "${dir}.pid" || -e "${dir}-data" || -e "${dir}-data.pid" ]]
+}
+
+start() {
+	local members="${1:-}" id dir data_dir log pid ready tick
+	local -a pids=()
+	if [[ ! "${members}" =~ ^[1-9]$ ]]; then
+		echo "cluster: members ${members}: want 1 to ${MAX_MEMBERS}" >&2
+		exit 2
+	fi
+	if ((${#SERVER_CPUS_LIST[@]} > 0 && ${#SERVER_CPUS_LIST[@]} < MEMBER_THREADS * members)); then
+		echo "cluster: SERVER_CPUS ${SERVER_CPUS}: want ${MEMBER_THREADS} cpus per member" >&2
+		exit 2
+	fi
+	for ((id = 0; id < MAX_MEMBERS; id++)); do
+		if pid="$(member_pid "${id}")"; then
+			echo "cluster: member ${id} already running: pid ${pid}" >&2
+			exit 1
+		fi
+	done
+	stop
+	if [[ ! -f "${JAR}" ]]; then
+		echo "cluster: ${JAR} missing: run make build-java" >&2
+		exit 1
+	fi
+	mkdir -p "${ROOT}/build"
+	for ((id = 0; id < members; id++)); do
+		# The shared driver thread takes the conductor affinity.
+		driver_defines=()
+		if ((${#SERVER_CPUS_LIST[@]} > 0)); then
+			driver_defines=("-Daeron.conductor.cpu.affinity=${SERVER_CPUS_LIST[MEMBER_THREADS * id]}")
+		fi
+		if ! AERON_DIR="$(member_dir "${id}")" DRIVER_PROPERTIES="${ROOT}/scripts/cluster-aeronmd.properties" \
+			DRIVER_LOG="${ROOT}/build/cluster-aeronmd-${id}.log" "${ROOT}/scripts/driver" start "${driver_defines[@]}"; then
+			stop
+			exit 1
+		fi
+	done
+	for ((id = 0; id < members; id++)); do
+		dir="$(member_dir "${id}")"
+		data_dir="${dir}-data"
+		log="$(member_log "${id}")"
+		mkdir -p "${data_dir}"
+		java_defines=()
+		if ((${#SERVER_CPUS_LIST[@]} > 0)); then
+			java_defines=("-Dbench.server.cpus=$(IFS=,; echo "${SERVER_CPUS_LIST[*]:MEMBER_THREADS * id + 1:MEMBER_THREADS - 1}")")
+		fi
+		# Clear the log before the launch. The ready check must not match the
+		# ready line of an earlier member.
+		: >"${log}"
+		java "${JAVA_FLAGS[@]}" "${java_defines[@]}" "-Daeron.dir=${dir}" "-Daeron.archive.dir=${data_dir}/archive" \
+			"-Daeron.cluster.dir=${data_dir}/cluster" -cp "${JAR}" "${MAIN_CLASS}" "${id}" "${members}" \
+			"${ROOT}/scripts/cluster.properties" >"${log}" 2>&1 &
+		pids+=("$!")
+		echo "$!" >"${data_dir}.pid"
+	done
+	for ((tick = 0; tick < START_TIMEOUT_TICKS; tick++)); do
+		ready=0
+		for ((id = 0; id < members; id++)); do
+			log="$(member_log "${id}")"
+			if grep -q "^cluster: member ${id} ready" "${log}"; then
+				ready=$((ready + 1))
+			elif ! kill -0 "${pids[id]}" 2>/dev/null; then
+				echo "cluster: member ${id} exited at start; log follows" >&2
+				cat "${log}" >&2
+				stop
+				exit 1
+			fi
+		done
+		if ((ready == members)); then
+			for ((id = 0; id < members; id++)); do
+				grep "^cluster: member ${id} ready" "$(member_log "${id}")"
+			done
+			echo "cluster: started: ${members} members"
+			return
+		fi
+		sleep 0.1
+	done
+	echo "cluster: not ready after 60s; member logs follow" >&2
+	for ((id = 0; id < members; id++)); do
+		cat "$(member_log "${id}")" >&2
+	done
+	stop
+	exit 1
+}
+
+stop() {
+	local id dir pid tick stopped=()
+	for ((id = 0; id < MAX_MEMBERS; id++)); do
+		if pid="$(member_pid "${id}")"; then
+			kill -TERM "${pid}" 2>/dev/null || true
+			stopped+=("${id}")
+		fi
+	done
+	for id in "${stopped[@]}"; do
+		for ((tick = 0; tick < STOP_TIMEOUT_TICKS; tick++)); do
+			member_pid "${id}" >/dev/null || break
+			sleep 0.1
+		done
+		if pid="$(member_pid "${id}")"; then
+			echo "cluster: member ${id} pid ${pid} still running after 10s; sending SIGKILL" >&2
+			kill -KILL "${pid}" 2>/dev/null || true
+		fi
+	done
+	for ((id = 0; id < MAX_MEMBERS; id++)); do
+		has_member "${id}" || continue
+		dir="$(member_dir "${id}")"
+		rm -f "${dir}-data.pid"
+		rm -rf "${dir}-data"
+		AERON_DIR="${dir}" "${ROOT}/scripts/driver" stop
+		rm -rf "${dir}"
+		echo "cluster: stopped member ${id}"
+	done
+}
+
+case "${1:-}" in
+start) start "${2:-}" ;;
+stop) stop ;;
+*)
+	echo "usage: scripts/cluster start <members> | stop" >&2
+	exit 2
+	;;
+esac

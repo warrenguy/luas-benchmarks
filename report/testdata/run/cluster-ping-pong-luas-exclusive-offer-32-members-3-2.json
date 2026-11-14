@@ -1,0 +1,39 @@
+{
+  "scenario": "cluster-ping-pong",
+  "client": "luas",
+  "variant": "exclusive-offer-32-members-3",
+  "config": {
+    "aeron_dir": "/dev/shm/luas-benchmarks",
+    "channel": "aeron:udp",
+    "stream_id": 1001,
+    "pong_stream_id": 1002,
+    "message_length": 32,
+    "messages": 20000,
+    "warmup_messages": 2000,
+    "fragment_limit": 10,
+    "publication": "exclusive",
+    "send_method": "offer",
+    "cluster_members": 3,
+    "cpus": [
+      6,
+      7
+    ]
+  },
+  "latency": {
+    "count": 20000,
+    "p50_ns": 40511,
+    "p90_ns": 42527,
+    "p99_ns": 46527,
+    "p99_9_ns": 60511,
+    "p99_99_ns": 60511,
+    "p99_999_ns": 440575,
+    "max_ns": 440575,
+    "histogram": "HISTFAAAADp42pJpmSzMwMAAwiDADKUZGRiY3Qx2LGCw/wAReJi8YA5jdUPtd8YJMs/Z+phX6jIBAgAA////CQxR"
+  },
+  "go_runtime": {
+    "allocations": 12,
+    "allocations_per_message": 0.0006,
+    "gc_cycles": 0,
+    "gc_pause_ns": 0
+  }
+}

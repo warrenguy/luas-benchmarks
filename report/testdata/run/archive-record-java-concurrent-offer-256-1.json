@@ -1,0 +1,32 @@
+{
+  "scenario": "archive-record",
+  "client": "java",
+  "variant": "concurrent-offer-256",
+  "config": {
+    "aeron_dir": "/dev/shm/luas-benchmarks",
+    "channel": "aeron:ipc",
+    "stream_id": 1001,
+    "pong_stream_id": 1002,
+    "message_length": 256,
+    "messages": 4194304,
+    "warmup_messages": 419430,
+    "fragment_limit": 10,
+    "publication": "concurrent",
+    "send_method": "offer",
+    "cpus": [
+      6,
+      7
+    ]
+  },
+  "throughput": {
+    "messages": 4194304,
+    "bytes": 1073741824,
+    "elapsed_ns": 599186286,
+    "messages_per_second": 7000000.0,
+    "megabytes_per_second": 1792.0
+  },
+  "jvm_runtime": {
+    "gc_count": 0,
+    "gc_time_ms": 0
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "scenario": "ipc-ping-pong",
+  "client": "luas",
+  "variant": "concurrent-offer-256",
+  "config": {
+    "aeron_dir": "/dev/shm/luas-benchmarks",
+    "channel": "aeron:ipc",
+    "stream_id": 1001,
+    "pong_stream_id": 1002,
+    "message_length": 256,
+    "messages": 1000000,
+    "warmup_messages": 100000,
+    "fragment_limit": 1,
+    "publication": "concurrent",
+    "send_method": "offer",
+    "cpus": [
+      6,
+      7
+    ]
+  },
+  "latency": {
+    "count": 1000000,
+    "p50_ns": 312,
+    "p90_ns": 345,
+    "p99_ns": 430,
+    "p99_9_ns": 1200,
+    "p99_99_ns": 1200,
+    "p99_999_ns": 1200,
+    "max_ns": 22015,
+    "histogram": "HISTFAAAAD542pJpmSzMwMAgxgABzFCakYGB2c1gxwIG+w8QgfcsB1ps7RteGSxnXPCPq5Fn3hzG205MgAAAAP//J9EN5Q=="
+  },
+  "go_runtime": {
+    "allocations": 12,
+    "allocations_per_message": 0.000012,
+    "gc_cycles": 0,
+    "gc_pause_ns": 0
+  }
+}

@@ -1,17 +1,25 @@
 #!/usr/bin/env bash
-# Start the driver and the Java archive. Run the connect check and every
-# scenario of every client with small counts. Each cluster-ping-pong case
-# starts a Java cluster of the member count it names and stops it after the
-# last client. Stop the archive and the driver. Each scenario run must
-# deliver every message and write result JSON that names the scenario, the
-# client and the message count in each count field of the case. Every
-# client of a case must report the same config and variant. A result file
-# must hold only the fields that the Go result type names. The smoke run
-# does not assert timing.
+# Run a quick end-to-end check of every client.
 # Usage: scripts/smoke [scenario ...]
 # With no scenario, run every case. Otherwise run the cases of the named
 # scenarios. The connect checks always run.
-# Exits non-zero when any case fails.
+#
+# Steps:
+#   - Start the driver and the Java archive.
+#   - Run the connect check of every client.
+#   - Run every scenario of every client with small counts. Each
+#     cluster-ping-pong case starts a Java cluster of the member count it
+#     names. The case stops the cluster after the last client.
+#   - Stop the archive and the driver.
+#
+# Checks:
+#   - Each scenario run must deliver every message.
+#   - The result JSON of each run must name the scenario and the client.
+#   - Each count field of the case must hold the message count.
+#   - Every client of a case must report the same config and variant.
+#   - A result file must hold only the fields that the Go result type names.
+#
+# The smoke run does not assert timing. Exits 1 when any step or check fails.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -97,7 +105,6 @@ run_client() {
 	esac
 }
 
-# run_connect runs the connect check of one client.
 run_connect() {
 	local client="$1"
 	echo "smoke: ${client} connect"

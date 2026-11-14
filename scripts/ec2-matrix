@@ -4,24 +4,39 @@
 # Usage: scripts/ec2-matrix
 #        scripts/ec2-matrix setup
 #
-# setup creates what a run needs and skips what exists: the bucket with
-# public access blocked, the instance role with get and put on the bucket's
-# runs/ prefix, the instance profile holding that role, and the EC2 Spot
-# service-linked role. The region needs a default VPC. The account needs
-# vCPU quota for both types on the chosen market. The caller needs EC2,
-# SSM, S3 and IAM access, and iam:PassRole on the instance role.
+# setup creates each resource a run needs and skips each that exists:
+# - the bucket, with public access blocked
+# - the instance role, with get and put on the bucket's runs/ prefix
+# - the instance profile that holds that role
+# - the EC2 Spot service-linked role
 #
-# The launcher uploads git archive HEAD of this repo to S3 and the instance
-# builds that tree, so a run does not need a push or repo credentials on
-# the instance. Tracked changes that are not committed are refused. Untracked
-# files are left behind. HEAD must not contain go.work. The instance checks
-# Luas out at the go.mod commit, as make driver does.
+# Requirements:
+# - The region needs a default VPC.
+# - The account needs vCPU quota for both types on the chosen market.
+# - The caller needs EC2, SSM, S3, and IAM access, and iam:PassRole on the
+#   instance role.
 #
-# A type with hyperthreading is launched with one thread per core, so each
-# vCPU is a core. Hot threads use DRIVER_CPUS, CLIENT_CPUS and SERVER_CPUS.
-# The first boot adds isolcpus, nohz_full and rcu_nocbs for those CPUs to the kernel
-# command line and reboots. cloud-init runs user data once per instance, so
-# the bootstrap installs itself as a cloud-init per-boot script first.
+# The launcher uploads git archive HEAD of this repo to S3. The instance
+# builds that tree. A run therefore needs neither a push nor repo
+# credentials on the instance.
+#
+# The launcher refuses:
+# - uncommitted changes to tracked files. The archive leaves out untracked
+#   files.
+# - a HEAD that contains go.work.
+#
+# The instance checks Luas out at the go.mod commit, as make driver does.
+#
+# The launcher starts a type with hyperthreading at one thread per core, so
+# each vCPU is a core. Hot threads use DRIVER_CPUS, CLIENT_CPUS, and
+# SERVER_CPUS.
+#
+# The first boot:
+# - adds isolcpus, nohz_full, and rcu_nocbs for those CPUs to the kernel
+#   command line.
+# - installs the bootstrap as a cloud-init per-boot script. cloud-init runs
+#   user data once per instance.
+# - reboots.
 #
 # Each instance:
 # - schedules a halt for WAIT_LIMIT_SECONDS plus 30 minutes on every boot,
@@ -31,51 +46,69 @@
 # - stops the matrix after WAIT_LIMIT_SECONDS.
 # - uploads results once, after the matrix exits, then shuts down.
 #
-# If something else ends the instance first, nothing gets uploaded to S3.
+# When something else ends the instance first, the instance does not upload
+# anything to S3.
 #
 # Environment:
+#
+# AWS:
 #   BUCKET              source and results bucket
 #                       (default luas-benchmarks-ACCOUNT, the account id)
-#   REGION              launch region (default: the AWS CLI configured
+#   REGION              launch region (default: AWS_REGION,
+#                       AWS_DEFAULT_REGION, or the AWS CLI configured
 #                       region)
 #   INSTANCE_PROFILE    instance profile and role name
 #                       (default luas-benchmarks)
+#   SECURITY_GROUP_NAME security group name (default luas-benchmarks)
+#
+# Instances:
+#   ARCHES              space list of arches to launch (default "amd64 arm")
 #   AMD64_INSTANCE_TYPE amd64 type (default m8azn.6xlarge)
 #   AMD64_AZ            amd64 zone (default: any default subnet)
 #   ARM_INSTANCE_TYPE   arm64 type (default c9g.8xlarge)
 #   ARM_AZ              arm64 zone (default: any default subnet)
-#   ARCHES              space list of arches to launch (default "amd64 arm")
+#   MARKET              spot or on-demand (default spot)
+#   VOLUME_SIZE         root volume size in GiB (default 30)
+#
+# CPUs:
 #   DRIVER_CPUS         3 driver CPUs, a comma list (default 1,2,3)
 #   CLIENT_CPUS         2 client CPUs, a comma list (default 4,5)
-#   SERVER_CPUS         12 server CPUs, a comma list (default 6 to 17): four
-#                       per cluster member, and the first for the archive of
-#                       an archive cell
-#   RUN_ID              S3 prefix, local directory name and the run-matrix
+#   SERVER_CPUS         12 server CPUs, a comma list (default 6 to 17)
+#                       - four per cluster member
+#                       - the first for the archive of an archive cell
+#
+# Run:
+#   RUN_ID              S3 prefix, local directory name, and the run-matrix
 #                       RUN_ID on each instance (default: UTC time)
+#   WAIT_LIMIT_SECONDS  matrix time limit on each instance (default 28800)
+#                       - The default matrix takes about 6.5 hours on
+#                         m8azn.6xlarge and 5.5 hours on c9g.8xlarge.
+#                       - The local wait gives up 30 minutes later.
+#
+# Forwarded to scripts/run-matrix when set:
 #   RUNS, THROUGHPUT_RUNS, MESSAGES, WARMUP_MESSAGES, ARCHIVE_BYTES,
 #   CLUSTER_MESSAGES, IPC_MESSAGES_DIVISOR, FIXED_RATE_SECONDS,
-#   FIXED_RATE_WARMUP_SECONDS,
-#   GOMAXPROCS          forwarded to scripts/run-matrix when set. Go clients
-#                       use GOMAXPROCS. Unlocked Luas runs at GOMAXPROCS 2.
+#   FIXED_RATE_WARMUP_SECONDS
+#                       run settings, as the scripts/run-matrix header
+#                       lists them
+#   GOMAXPROCS          Go client GOMAXPROCS. Unlocked Luas runs at
+#                       GOMAXPROCS 2.
 #   SCENARIOS, CLIENTS, VARIANTS, FIXED_RATES
-#                       space lists forwarded to make matrix and
-#                       scripts/run-matrix when set
-#   LUAS_UNLOCKED       forwarded to scripts/run-matrix when set. 1, its
-#                       default, unlocks each pinned Luas hot goroutine in
-#                       the ping-pong, cluster and fixed-rate scenarios. 0
-#                       keeps Luas locked.
-#   WAIT_LIMIT_SECONDS  matrix time limit on each instance (default 28800).
-#                       The default matrix takes about 6.5 hours on
-#                       m8azn.6xlarge and 5.5 hours on c9g.8xlarge.
-#                       The local wait gives up 30 minutes later.
-#   MARKET              spot or on-demand (default spot)
+#                       space lists, also forwarded to make matrix
+#   LUAS_UNLOCKED       0 or 1 (scripts/run-matrix default 1)
+#                       - 1 unlocks each pinned Luas hot goroutine in the
+#                         ping-pong, cluster, and fixed-rate scenarios.
+#                       - 0 keeps Luas locked.
 #
 # Objects written under s3://BUCKET/runs/RUN_ID/:
 #   source.tar.gz, commit
 #   amd64/results/RUN_ID/, amd64/user-data.log, amd64/status
 #   arm/results/RUN_ID/, arm/user-data.log, arm/status
-# The status object is the matrix exit code. Local copies land in
-# results/ec2/RUN_ID/.
+#
+# The status object holds the bootstrap exit code. A failed upload after a
+# clean exit sets it to 1.
+#
+# Local copies land in results/ec2/RUN_ID/.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -101,7 +134,6 @@ FORWARDED_VARS=(
 # here.
 FORWARDED_LISTS=(SCENARIOS CLIENTS VARIANTS FIXED_RATES)
 
-# Per-arch launch settings, keyed by arch.
 KNOWN_ARCHES=(amd64 arm)
 read -ra ARCHES <<<"${ARCHES:-${KNOWN_ARCHES[*]}}"
 declare -A INSTANCE_TYPE=(
@@ -118,7 +150,6 @@ declare -A AMI_PARAM=(
 )
 declare -A INSTANCE_ID=()
 
-# say prints a timestamped launcher line to stderr.
 say() {
 	echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) ec2-matrix: $*" >&2
 }
@@ -128,15 +159,14 @@ die() {
 	exit 1
 }
 
-# require_tool exits when command $1 is missing.
 require_tool() {
 	command -v "$1" >/dev/null 2>&1 || die "$1 required"
 }
 
 # load_account resolves REGION from the environment or the AWS CLI
 # configuration, and BUCKET from the account id. The instance gets the
-# region explicitly: a fresh instance does not have an AWS configuration,
-# and its only log is the one it uploads.
+# region explicitly. A fresh instance does not have an AWS configuration.
+# Its only log is the one it uploads.
 load_account() {
 	REGION="${REGION:-${AWS_REGION:-${AWS_DEFAULT_REGION:-$(aws configure get region 2>/dev/null || true)}}}"
 	[[ -n "${REGION}" ]] || die "REGION required: no region in the AWS CLI configuration"
@@ -153,10 +183,10 @@ load_versions() {
 	[[ "${JDK_MAJOR}" =~ ^[0-9]+$ ]] || die "pom.xml maven.compiler.release missing"
 }
 
-# check_tree refuses a HEAD that the instance cannot build as this repo
-# intends, and refuses uncommitted changes to tracked files. git archive
-# would otherwise launch a different tree from the one in the worktree.
-# It records the HEAD commit in COMMIT.
+# check_tree refuses a HEAD that contains go.work. It also refuses
+# uncommitted changes to tracked files. git archive would otherwise launch
+# a tree that differs from the worktree. check_tree records the HEAD commit
+# in COMMIT.
 check_tree() {
 	if git -C "${ROOT}" cat-file -e "HEAD:go.work" 2>/dev/null; then
 		die "HEAD contains go.work; recorded runs use the go.mod pins only"
@@ -231,8 +261,9 @@ check_downloads() {
 	done
 }
 
-# check_account exits when the bucket, the instance profile or, on the spot
-# market, the spot role is missing, and names the setup command.
+# check_account exits when the bucket, the instance profile, or the spot
+# role is missing. It checks the spot role only on the spot market. The
+# message names the setup command.
 check_account() {
 	[[ "${MARKET}" != spot ]] || have_spot_role ||
 		die "AWSServiceRoleForEC2Spot is missing; run scripts/ec2-matrix setup"
@@ -425,9 +456,9 @@ mkdir -p /opt/luas-benchmarks/results
 aws s3 cp "s3://${BUCKET}/runs/${RUN_ID}/source.tar.gz" - | tar -C /opt/luas-benchmarks -xz
 export DRIVER_CPUS CLIENT_CPUS SERVER_CPUS
 
-# make matrix runs until WAIT_LIMIT_SECONDS. The tree holds no .git, so
-# host.json takes the commit from S3. KILL after 5 minutes so finish runs
-# even if a child ignores TERM.
+# make matrix runs for at most WAIT_LIMIT_SECONDS. The tree does not hold
+# .git, so host.json takes the commit from S3. timeout sends KILL 5 minutes
+# after TERM, so finish runs even when a child ignores TERM.
 commit="$(aws s3 cp "s3://${BUCKET}/runs/${RUN_ID}/commit" -)"
 echo "luas-benchmarks: matrix ${RUN_ID} starting $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 cd /opt/luas-benchmarks
@@ -439,7 +470,9 @@ EOF
 	printf '%s\n' "${data}"
 }
 
-# ensure_network selects the default VPC and a security group with no inbound rule.
+# ensure_network selects the default VPC. It selects the
+# SECURITY_GROUP_NAME group in that VPC, or creates the group without
+# inbound rules.
 ensure_network() {
 	VPC="$(aws ec2 describe-vpcs \
 		--filters Name=is-default,Values=true \
@@ -472,7 +505,6 @@ subnet_for_az() {
 	echo "${subnet}"
 }
 
-# ami_id prints the AMI id stored in SSM parameter $1.
 ami_id() {
 	local name="$1" ami
 	ami="$(aws ssm get-parameter --name "${name}" --query Parameter.Value --output text)"
@@ -481,8 +513,8 @@ ami_id() {
 }
 
 # cpu_options prints the run-instances --cpu-options value that gives
-# instance type $1 one thread per core, or nothing when the type does not
-# have hyperthreading.
+# instance type $1 one thread per core. It does not print anything when the
+# type does not have hyperthreading.
 cpu_options() {
 	local type="$1" cores threads
 	read -r cores threads < <(aws ec2 describe-instance-types --instance-types "${type}" \
@@ -539,7 +571,8 @@ launch_arch() {
 	say "${arch}: ${id} ${type} ${az:-${subnet}} ${MARKET}"
 }
 
-# upload_source puts the git archive and commit id where the instances read them.
+# upload_source puts the git archive and commit id where the instances read
+# them.
 upload_source() {
 	git -C "${ROOT}" archive --format=tar.gz HEAD |
 		aws s3 cp - "s3://${BUCKET}/runs/${RUN_ID}/source.tar.gz"
@@ -547,8 +580,8 @@ upload_source() {
 	say "uploaded s3://${BUCKET}/runs/${RUN_ID}/source.tar.gz ${COMMIT}"
 }
 
-# record_launch writes the instance ids before the wait, so a local interrupt
-# still leaves enough to find the run.
+# record_launch writes the instance ids to launch.txt before the wait. A
+# local interrupt then still leaves enough to find the run.
 record_launch() {
 	local dest="${ROOT}/results/ec2/${RUN_ID}" arch
 	mkdir -p "${dest}"
@@ -604,7 +637,8 @@ wait_for_shutdown() {
 	done
 }
 
-# download_arch copies one arch prefix and returns 1 when its status is not 0.
+# download_arch copies the S3 prefix of arch $1. It returns 1 unless the
+# status object holds 0.
 download_arch() {
 	local arch="$1" dest status
 	dest="${ROOT}/results/ec2/${RUN_ID}/${arch}"
@@ -647,7 +681,8 @@ main() {
 	record_launch
 	say "run ${RUN_ID} local results ${ROOT}/results/ec2/${RUN_ID}"
 	wait_for_shutdown || rc=1
-	# An arch that did not launch has nothing of this launch in S3.
+	# Skip an arch that did not launch. S3 does not hold any of its objects
+	# from this launch.
 	for arch in "${ARCHES[@]}"; do
 		[[ -n "${INSTANCE_ID[${arch}]:-}" ]] || continue
 		download_arch "${arch}" || rc=1

@@ -2,9 +2,13 @@
 # Start or stop the Java archive on the running driver with
 # scripts/archive.properties.
 # Usage: scripts/archive start | stop
-# AERON_DIR names the driver directory under /dev/shm. The archive directory
-# is AERON_DIR with an -archive suffix. stop removes it. SERVER_CPUS, a comma
-# list, pins the archive thread to its first CPU. Unset leaves it unpinned.
+#
+# Environment:
+#   AERON_DIR    driver directory under /dev/shm. The archive directory is
+#                AERON_DIR with an -archive suffix. stop removes it.
+#   SERVER_CPUS  comma list of CPUs. Pins the archive thread to its first
+#                CPU. Unset leaves it unpinned.
+#
 # start writes the archive log to build/archive.log. start needs
 # target/bench.jar.
 set -euo pipefail

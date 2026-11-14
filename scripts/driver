@@ -1,11 +1,18 @@
 #!/usr/bin/env bash
 # Start or stop aeronmd with scripts/aeronmd.properties.
 # Usage: scripts/driver start [-Dname=value ...] | stop
+#
 # start passes each -Dname=value to aeronmd. aeronmd loads the properties
-# file after the defines, so a file property wins over a define of the same
-# name. AERONMD names the driver binary. AERON_DIR names the driver directory
-# under /dev/shm. start writes the driver log to build/aeronmd.log.
-# DRIVER_PROPERTIES and DRIVER_LOG replace the properties file and the log.
+# file after the defines. A file property wins over a define of the same
+# name.
+#
+# Environment:
+#   AERONMD            driver binary
+#   AERON_DIR          driver directory under /dev/shm
+#   DRIVER_PROPERTIES  properties file (default scripts/aeronmd.properties)
+#   DRIVER_LOG         log file (default build/aeronmd.log)
+#
+# start writes the driver log to DRIVER_LOG.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -23,8 +30,8 @@ START_TIMEOUT_TICKS=100
 STOP_TIMEOUT_TICKS=100
 
 # driver_pid prints the PID in PID_FILE when that process is an aeronmd on
-# AERON_DIR. Any aeronmd binary matches, so a driver from another AERONMD
-# still counts. Returns non-zero when PID_FILE is missing or names another
+# AERON_DIR. Any aeronmd binary matches. A driver from another AERONMD still
+# counts. Returns non-zero when PID_FILE is missing or names another
 # process.
 driver_pid() {
 	[[ -f "${PID_FILE}" ]] || return 1

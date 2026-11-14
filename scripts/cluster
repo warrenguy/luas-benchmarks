@@ -1,16 +1,30 @@
 #!/usr/bin/env bash
 # Start or stop a Java cluster with scripts/cluster.properties.
 # Usage: scripts/cluster start <members> | stop
+#
 # Member i runs bench.ClusterServer on its own aeronmd with
-# scripts/cluster-aeronmd.properties. AERON_DIR names the client driver
-# directory under /dev/shm. Member i keeps its driver directory at
-# AERON_DIR-member-i and its archive and cluster directories under
-# AERON_DIR-member-i-data. stop removes them. SERVER_CPUS, a comma list, pins
-# the threads of member i to its CPUs 4i to 4i+3: driver, archive, consensus
-# module, service. Unset leaves them unpinned. start writes the log of member
-# i to build/cluster-i.log, and its driver log to build/cluster-aeronmd-i.log. start returns once every
-# member reports the end of the first election. start and stop
-# need AERONMD. start also needs target/bench.jar.
+# scripts/cluster-aeronmd.properties. Member i uses these paths:
+#   AERON_DIR-member-i           driver directory
+#   AERON_DIR-member-i-data      archive and cluster directories
+#   build/cluster-i.log          member log
+#   build/cluster-aeronmd-i.log  driver log
+# stop removes the directories.
+#
+# Environment:
+#   AERONMD      driver binary. start and stop need it.
+#   AERON_DIR    client driver directory under /dev/shm
+#   SERVER_CPUS  comma list of CPUs, four per member. Member 0 takes the
+#                first four, member 1 the next four, and so on. Each
+#                member pins its driver, archive, consensus module, and
+#                service to its four CPUs in that order. Empty or unset
+#                leaves the threads unpinned. For example,
+#                SERVER_CPUS=6,7,8,9,10,11,12,13 with two members gives:
+#                  member 0: driver 6, archive 7, consensus 8, service 9
+#                  member 1: driver 10, archive 11, consensus 12,
+#                            service 13
+#
+# start returns once every member reports the end of the first election.
+# start also needs target/bench.jar.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -36,12 +50,10 @@ IFS=, read -ra SERVER_CPUS_LIST <<<"${SERVER_CPUS:-}"
 START_TIMEOUT_TICKS=600
 STOP_TIMEOUT_TICKS=100
 
-# member_dir prints the driver directory of member $1.
 member_dir() {
 	echo "${AERON_DIR}-member-$1"
 }
 
-# member_log prints the ClusterServer log of member $1.
 member_log() {
 	echo "${ROOT}/build/cluster-$1.log"
 }
@@ -90,7 +102,8 @@ start() {
 	fi
 	mkdir -p "${ROOT}/build"
 	for ((id = 0; id < members; id++)); do
-		# The shared driver thread takes the conductor affinity.
+		# SHARED threading mode runs one driver thread. The conductor affinity pins
+		# that thread.
 		driver_defines=()
 		if ((${#SERVER_CPUS_LIST[@]} > 0)); then
 			driver_defines=("-Daeron.conductor.cpu.affinity=${SERVER_CPUS_LIST[MEMBER_THREADS * id]}")
@@ -110,8 +123,8 @@ start() {
 		if ((${#SERVER_CPUS_LIST[@]} > 0)); then
 			java_defines=("-Dbench.server.cpus=$(IFS=,; echo "${SERVER_CPUS_LIST[*]:MEMBER_THREADS * id + 1:MEMBER_THREADS - 1}")")
 		fi
-		# Clear the log before the launch. The ready check must not match the
-		# ready line of an earlier member.
+		# Clear the log before the launch. The ready check must not match a ready
+		# line from an earlier start.
 		: >"${log}"
 		java "${JAVA_FLAGS[@]}" "${java_defines[@]}" "-Daeron.dir=${dir}" "-Daeron.archive.dir=${data_dir}/archive" \
 			"-Daeron.cluster.dir=${data_dir}/cluster" -cp "${JAR}" "${MAIN_CLASS}" "${id}" "${members}" \

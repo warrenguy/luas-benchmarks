@@ -1,107 +1,150 @@
 #!/usr/bin/env bash
 # Run every scenario variant of every client against one client driver.
 # Cluster cells add one driver per cluster member. Write one result per
-# scenario, client, variant and run, plus the host.json run record.
+# scenario, client, variant, and run, plus the host.json run record.
+#
 # Usage: scripts/run-matrix [scenario ...]
 # With no scenario, run every scenario.
 #
 # Environment:
-#   CLIENTS             space list of clients to run (default
-#                       "luas java aerongo")
-#   VARIANTS            space list of variants to run, such as
-#                       "exclusive-offer-256" (default: every variant). Each
-#                       must name a variant of a selected scenario.
-#   AERONMD, AERON_DIR  driver binary and directory, as for scripts/driver
-#   RUN_ID              run directory name under results/ (default: UTC time)
-#   COMMIT              luas-benchmarks commit host.json records (default:
-#                       HEAD of this checkout, with a -dirty suffix when
-#                       tracked files differ from HEAD). Required outside a
-#                       git checkout.
-#   RUNS                runs per cell outside the throughput scenarios
-#                       (default 5)
-#   THROUGHPUT_RUNS     runs per throughput cell (default 15). These cells
-#                       spread more between runs, and each run is short.
-#   MESSAGES, WARMUP_MESSAGES
-#                       message counts per run (default: ipc-throughput
-#                       cells take IPC_MESSAGES or, for aeron-go,
-#                       AERONGO_IPC_MESSAGES, over IPC_MESSAGES_DIVISOR;
-#                       udp-throughput cells take THROUGHPUT_MESSAGES,
-#                       UDP_MESSAGES or, for aeron-go, AERONGO_MESSAGES;
-#                       archive cells derive them from ARCHIVE_BYTES;
-#                       cluster cells derive them from CLUSTER_MESSAGES;
-#                       fixed-rate cells derive them from the rates and
-#                       seconds below; ping-pong cells take the client
-#                       defaults)
-#   ARCHIVE_BYTES       bytes each archive cell records or replays per run
-#                       (default 8 GiB, about 2 s at the Luas and Java
-#                       rates). Each archive cell sends ARCHIVE_BYTES /
-#                       length messages, rounded down. The warmup sends the
-#                       same count. A run holds twice ARCHIVE_BYTES in
-#                       /dev/shm. ARCHIVE_BYTES must be at least the longest
-#                       archive message length.
-#   IPC_MESSAGES_DIVISOR
-#                       divides the ipc-throughput counts (default 4 on
-#                       aarch64, else 1). The counts give about 2 s at the
-#                       fastest amd64 variant. An arm64 host runs at a
-#                       quarter of that rate or less.
-#   CLUSTER_MESSAGES    round trips each cluster cell measures per run
-#                       (default 1000000, as the ping-pong scenarios). The
-#                       warmup sends a tenth of that count. The default run
-#                       fits CLIENT_TIMEOUT at a round trip time of up to
-#                       0.5 ms.
-#   FIXED_RATES         space list of the rate:length pair of each
-#                       reference-rate cell, in messages per second and
-#                       bytes (default "501000:32 301000:288 101000:1344",
-#                       the Aeron load test rig defaults). Each pair is
-#                       exclusive try-claim on ipc-fixed-rate and
-#                       udp-fixed-rate.
-#                       FIXED_RATE_EXTRA cells are added either way. An
-#                       aarch64 host skips the higher IPC rates there.
-#   FIXED_RATE_SECONDS  measured seconds of each fixed-rate run (default
-#                       60). Each run sends rate times seconds messages.
-#   FIXED_RATE_WARMUP_SECONDS
-#                       warmup length of each fixed-rate run at the cell
-#                       rate (default 30)
-#   HOUSEKEEPING_CPUS   CPU list of every process (default: online CPUs
-#                       minus isolated, driver and client CPUs)
-#   DRIVER_CPUS         3 CPUs: driver conductor, sender, receiver (default:
-#                       the first three isolated CPUs)
-#   CLIENT_CPUS         2 CPUs: client hot threads (default: the fourth and
-#                       fifth isolated CPUs)
-#   SERVER_CPUS         CPUs of the cluster member and archive threads
-#                       (default: the isolated CPUs after the fifth). Member
-#                       i takes CPUs 4i to 4i+3: driver, archive, consensus
-#                       module, service. The archive of an archive cell
-#                       takes the first. A selected cluster cell needs four
-#                       per member. A selected archive cell needs one.
-#   GOMAXPROCS          Go client GOMAXPROCS, except unlocked Luas
-#                       (default: housekeeping plus client CPU count)
-#   LUAS_UNLOCKED       1 runs Luas with -unlock-threads in the ping-pong,
-#                       cluster and fixed-rate scenarios. 0 keeps Luas
-#                       locked there (default: 1). Luas still pins each hot
-#                       thread. It then unlocks each hot goroutine from its
-#                       thread. Unlocked Luas runs at GOMAXPROCS 2, its hot
-#                       thread count. Luas stays locked in the other
-#                       scenarios.
-#   CLIENT_TIMEOUT      limit per client run (default 600s)
+#
+#   Selection:
+#     CLIENTS             space-separated list of clients to run (default
+#                         "luas java aerongo")
+#     VARIANTS            space-separated list of variants to run, such as
+#                         "exclusive-offer-256" (default: every variant)
+#                         - Each must name a variant of a selected scenario.
+#
+#   Driver and output:
+#     AERONMD, AERON_DIR  driver binary and directory, as for scripts/driver
+#     RUN_ID              run directory name under results/ (default: UTC
+#                         time)
+#     COMMIT              luas-benchmarks commit that host.json records
+#                         (default: HEAD of this checkout)
+#                         - The default adds a -dirty suffix when tracked
+#                           files differ from HEAD.
+#                         - Required outside a git checkout.
+#
+#   Runs:
+#     RUNS                runs per cell outside the throughput scenarios
+#                         (default 5)
+#     THROUGHPUT_RUNS     runs per throughput cell (default 15)
+#                         - Throughput results spread more between runs.
+#                         - Each throughput run is short.
+#     CLIENT_TIMEOUT      time limit per client run (default 600s)
+#
+#   Counts:
+#     MESSAGES, WARMUP_MESSAGES
+#                         message counts per run. Default per scenario:
+#                         - ipc-throughput: IPC_MESSAGES or, for aeron-go,
+#                           AERONGO_IPC_MESSAGES, over IPC_MESSAGES_DIVISOR
+#                         - udp-throughput: THROUGHPUT_MESSAGES, UDP_MESSAGES,
+#                           or, for aeron-go, AERONGO_MESSAGES
+#                         - archive: derived from ARCHIVE_BYTES
+#                         - cluster: derived from CLUSTER_MESSAGES
+#                         - fixed-rate: derived from the rates and seconds
+#                           below
+#                         - ping-pong: the client defaults
+#     ARCHIVE_BYTES       bytes each archive cell records or replays per run
+#                         (default 8 GiB, about 2 s at the Luas and Java
+#                         rates)
+#                         - Each archive cell sends ARCHIVE_BYTES / length
+#                           messages, rounded down.
+#                         - The warmup sends the same count.
+#                         - A run holds twice ARCHIVE_BYTES in /dev/shm.
+#                         - ARCHIVE_BYTES must be at least the longest
+#                           archive message length.
+#     IPC_MESSAGES_DIVISOR
+#                         divides the ipc-throughput counts (default 4 on
+#                         aarch64, else 1)
+#                         - The counts give about 2 s at the fastest amd64
+#                           variant.
+#                         - An arm64 host runs at a quarter of that rate or
+#                           less.
+#     CLUSTER_MESSAGES    round trips each cluster cell measures per run
+#                         (default 1000000, as in the ping-pong scenarios)
+#                         - The warmup sends a tenth of that count.
+#                         - The default run fits CLIENT_TIMEOUT at a round
+#                           trip time of up to 0.5 ms.
+#
+#   Fixed rate:
+#     FIXED_RATES         space-separated list of the rate:length pair of
+#                         each reference-rate cell, in messages per second
+#                         and bytes (default "501000:32 301000:288 101000:1344")
+#                         - The default is the Aeron load test rig default.
+#                         - Each pair runs exclusive try-claim on
+#                           ipc-fixed-rate and udp-fixed-rate.
+#                         - The FIXED_RATE_EXTRA cells run in addition to
+#                           these pairs.
+#                         - An aarch64 host skips the higher IPC rates of
+#                           FIXED_RATE_EXTRA.
+#     FIXED_RATE_SECONDS  measured seconds of each fixed-rate run (default 60)
+#                         - Each run sends rate times seconds messages.
+#     FIXED_RATE_WARMUP_SECONDS
+#                         warmup length of each fixed-rate run at the cell
+#                         rate (default 30)
+#
+#   CPUs:
+#     HOUSEKEEPING_CPUS   CPU list every process starts on (default: online
+#                         CPUs minus isolated, driver, client, and server
+#                         CPUs)
+#     DRIVER_CPUS         3 CPUs: driver conductor, sender, receiver (default:
+#                         the first three isolated CPUs)
+#     CLIENT_CPUS         2 CPUs: client hot threads (default: the fourth and
+#                         fifth isolated CPUs)
+#     SERVER_CPUS         CPUs of the cluster member and archive threads
+#                         (default: the isolated CPUs after the fifth)
+#                         - Each cluster member takes four CPUs. Member 0
+#                           takes the first four, member 1 the next four,
+#                           and so on. Each member pins its driver,
+#                           archive, consensus module, and service to its
+#                           four CPUs in that order. For example,
+#                           SERVER_CPUS=6,7,8,9,10,11,12,13 gives member 0
+#                           CPUs 6 to 9 and member 1 CPUs 10 to 13.
+#                         - The archive of an archive cell takes the first
+#                           SERVER_CPUS CPU.
+#                         - A selected cluster cell needs four per member.
+#                         - A selected archive cell needs one.
+#     GOMAXPROCS          Go client GOMAXPROCS, except unlocked Luas
+#                         (default: housekeeping plus client CPU count)
+#
+#   Luas:
+#     LUAS_UNLOCKED       1 runs Luas with -unlock-threads in the ping-pong,
+#                         cluster, and fixed-rate scenarios (default: 1)
+#                         - 0 keeps Luas locked there.
+#                         - Luas still pins each hot thread, then unlocks
+#                           the hot goroutine from it.
+#                         - Unlocked Luas runs at GOMAXPROCS 2, its hot
+#                           thread count.
+#                         - Luas stays locked in the other scenarios.
 #
 # Each cell runs RUNS or THROUGHPUT_RUNS times. Round n starts with the nth
-# client of CLIENTS, wrapping, and keeps the CLIENTS order. No client always
-# runs first.
+# client of CLIENTS. The other clients follow in CLIENTS order, wrapping. The
+# first client changes from round to round.
+#
 # Each run starts a fresh client driver. The restart removes AERON_DIR, so a
 # run does not measure while the driver frees the logs of an earlier run.
+#
 # Each archive cell run starts a fresh Java archive on the driver. The run
 # stops the archive after the client exits. The stop removes the recordings.
+#
 # Each cluster cell run starts a fresh Java cluster of the cell member count.
 # The run stops the cluster after the client exits. The stop removes the
 # cluster log and its recordings. Each member records the cluster log to
-# /dev/shm. Each cluster member busy-spins four threads, each pinned to one
-# SERVER_CPUS CPU: its driver, archive, consensus module and service. The
-# archive of an archive cell pins its thread to the first SERVER_CPUS CPU.
-# Every process starts on the housekeeping CPUs. Each hot thread then moves
-# itself to one CPU of DRIVER_CPUS, CLIENT_CPUS or SERVER_CPUS. The four CPU
-# lists must not share a CPU.
-# Exits non-zero when any run fails. The other runs still go ahead.
+# /dev/shm.
+#
+# CPU placement:
+# - Every process starts on the housekeeping CPUs.
+# - Each hot thread then moves itself to one CPU of DRIVER_CPUS, CLIENT_CPUS,
+#   or SERVER_CPUS.
+# - Each cluster member busy-spins four threads, each pinned to one
+#   SERVER_CPUS CPU: its driver, archive, consensus module, and service.
+# - The archive of an archive cell pins its thread to the first SERVER_CPUS
+#   CPU.
+# - The four CPU lists must not share a CPU.
+#
+# Exits non-zero when any run fails. A failed run does not stop the other
+# runs.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -142,12 +185,16 @@ CLUSTER_SCENARIOS=(cluster-ping-pong)
 FIXED_RATE_SCENARIOS=(ipc-fixed-rate udp-fixed-rate)
 read -ra FIXED_RATES <<<"${FIXED_RATES:-501000:32 301000:288 101000:1344}"
 # FIXED_RATE_EXTRA cells sit beside the reference rates. Each entry is
-# "scenario publication send-method length rate=<msg/s>". The higher IPC
-# rates leave a few messages in flight at the reference-rate round trip.
-# An arm64 host does not sustain them, so aarch64 skips them. UDP has no
-# second rate: one that both hosts finish sits near one message in flight.
-# The 16384-byte cell is offer, at 25000 msg/s: try-claim stops at one
-# frame, and the clients assemble a message that spans frames.
+# "scenario publication send-method length rate=<msg/s>".
+#
+# The higher IPC rates leave a few messages in flight at the reference-rate
+# round trip. An arm64 host does not sustain them, so aarch64 skips them.
+#
+# UDP does not get a second rate: a rate that both hosts finish sits near one
+# message in flight.
+#
+# The 16384-byte cell uses offer at 25000 msg/s. Try-claim stops at one
+# frame. The clients assemble a message that spans frames.
 FIXED_RATE_EXTRA=()
 if [[ "$(uname -m)" != aarch64 ]]; then
 	FIXED_RATE_EXTRA+=(
@@ -255,7 +302,6 @@ expand_cpus() {
 	done
 }
 
-# join_cpus prints its arguments joined with commas.
 join_cpus() {
 	local IFS=,
 	echo "$*"
@@ -342,13 +388,17 @@ DRIVER_DEFINES=(
 	"aeron.receiver.cpu.affinity=${driver_cpus[2]}"
 )
 
-# Each cell: scenario, publication, send method, message length and, for a
-# cluster cell, members=<count> or, for a fixed-rate cell, rate=<msg/s>.
-# Every client of a cell gets the same flags. Cluster cells use the
-# exclusive ingress publication, the Java and Luas cluster client default,
-# and Offer: aeron-go AeronCluster does not have TryClaim. Fixed-rate cells
-# use the exclusive publication and TryClaim, as the echo client of the
-# Aeron load test rig does.
+# Each cell holds the scenario, publication, send method, and message
+# length. Every client of a cell gets the same flags. Extra fields:
+# - A cluster cell adds members=<count>.
+# - A fixed-rate cell adds rate=<msg/s>.
+#
+# Publication and send method:
+# - Cluster cells use the exclusive ingress publication, the Java and Luas
+#   cluster client default.
+# - Cluster cells use Offer: aeron-go AeronCluster does not have TryClaim.
+# - Reference-rate cells use the exclusive publication and TryClaim, as the
+#   echo client of the Aeron load test rig does.
 CELLS=()
 for scenario in "${THROUGHPUT_SCENARIOS[@]}"; do
 	for publication in concurrent exclusive; do
@@ -431,24 +481,22 @@ for wanted in "${VARIANTS[@]}"; do
 	"${matched}" || die "variant ${wanted} matches no cell of the selected scenarios"
 done
 
-# is_archive_scenario returns zero when scenario $1 runs against the archive.
 is_archive_scenario() {
 	[[ " ${ARCHIVE_SCENARIOS[*]} " == *" $1 "* ]]
 }
 
-# is_cluster_scenario returns zero when scenario $1 runs against the cluster.
 is_cluster_scenario() {
 	[[ " ${CLUSTER_SCENARIOS[*]} " == *" $1 "* ]]
 }
 
-# is_fixed_rate_scenario returns zero when scenario $1 sends at a fixed rate.
 is_fixed_rate_scenario() {
 	[[ " ${FIXED_RATE_SCENARIOS[*]} " == *" $1 "* ]]
 }
 
 # is_unlocked_scenario returns zero when LUAS_UNLOCKED=1 unlocks Luas in
-# scenario $1: a ping-pong, cluster or fixed-rate scenario. Unlocked, a
-# throughput hot goroutine can leave its pinned thread for a housekeeping CPU.
+# scenario $1: a ping-pong, cluster, or fixed-rate scenario. Throughput and
+# archive stay locked. An unlocked throughput hot goroutine can leave its
+# pinned thread for a housekeeping CPU.
 is_unlocked_scenario() {
 	[[ " ${PING_PONG_SCENARIOS[*]} ${CLUSTER_SCENARIOS[*]} ${FIXED_RATE_SCENARIOS[*]} " == *" $1 "* ]]
 }
@@ -459,7 +507,7 @@ is_throughput_scenario() {
 	[[ " ${THROUGHPUT_SCENARIOS[*]} " == *" $1 "* ]]
 }
 
-# is_selected_cell reports whether the scenario arguments and VARIANTS
+# is_selected_cell returns zero when the scenario arguments and VARIANTS
 # select cell $1.
 is_selected_cell() {
 	local scenario variant
@@ -471,8 +519,8 @@ is_selected_cell() {
 	((${#VARIANTS[@]} == 0)) || [[ " ${VARIANTS[*]} " == *" ${variant} "* ]]
 }
 
-# Every selected cluster and archive cell needs its server CPUs before the
-# first run.
+# Check the server CPUs of every selected cluster and archive cell before
+# the first run.
 for cell in "${CELLS[@]}"; do
 	is_selected_cell "${cell}" "$@" || continue
 	read -r scenario _ _ _ extra <<<"${cell}"
@@ -489,19 +537,20 @@ done
 
 # count_flags sets COUNT_FLAGS for client $1 and scenario $2 at message
 # length $3 and, for a fixed-rate scenario, rate $4. MESSAGES and
-# WARMUP_MESSAGES win. An archive scenario otherwise moves ARCHIVE_BYTES,
-# after a warmup of the same size. A cluster scenario otherwise measures
-# CLUSTER_MESSAGES round trips, after a warmup of a tenth of them. A
-# fixed-rate scenario otherwise sends for FIXED_RATE_SECONDS at rate $4,
-# after a warmup of FIXED_RATE_WARMUP_SECONDS at the same rate. A JIT
-# client that warms up below the measured rate recompiles its hot path once
-# the clock runs. An
-# ipc-throughput scenario otherwise measures IPC_MESSAGES, or
-# AERONGO_IPC_MESSAGES for aeron-go, over IPC_MESSAGES_DIVISOR, after a
-# warmup of the same count. A udp-throughput scenario otherwise measures
-# THROUGHPUT_MESSAGES, UDP_MESSAGES or, for aeron-go, AERONGO_MESSAGES,
-# after a warmup of a quarter of that count. The quarter writes past the
-# whole log: three 16 MiB UDP terms.
+# WARMUP_MESSAGES override the defaults.
+#
+# Default per scenario:
+# - archive: moves ARCHIVE_BYTES, after a warmup of the same size.
+# - cluster: measures CLUSTER_MESSAGES round trips, after a warmup of a
+#   tenth of them.
+# - fixed-rate: sends for FIXED_RATE_SECONDS at rate $4, after a warmup of
+#   FIXED_RATE_WARMUP_SECONDS at the same rate. A JIT client that warms up
+#   below the measured rate recompiles its hot path once the clock runs.
+# - ipc-throughput: measures IPC_MESSAGES, or AERONGO_IPC_MESSAGES for
+#   aeron-go, over IPC_MESSAGES_DIVISOR, after a warmup of the same count.
+# - udp-throughput: measures THROUGHPUT_MESSAGES, UDP_MESSAGES, or, for
+#   aeron-go, AERONGO_MESSAGES, after a warmup of a quarter of that count.
+#   The quarter writes past the whole log: three 16 MiB UDP terms.
 count_flags() {
 	local client="$1" scenario="$2" length="$3" rate="${4:-}" messages="${MESSAGES:-}" warmup="${WARMUP_MESSAGES:-}"
 	local count
@@ -548,7 +597,7 @@ restart_driver() {
 
 # run_client runs client $1 with the remaining arguments on the housekeeping
 # CPUs under CLIENT_TIMEOUT. $2 names the scenario. With LUAS_UNLOCKED=1, Luas
-# adds -unlock-threads in a ping-pong, cluster or fixed-rate scenario. Luas
+# adds -unlock-threads in a ping-pong, cluster, or fixed-rate scenario. Luas
 # then runs at a GOMAXPROCS of 2.
 run_client() {
 	local client="$1" gomaxprocs="${GOMAXPROCS}"

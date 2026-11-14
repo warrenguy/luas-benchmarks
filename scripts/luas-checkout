@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Clone or fetch Luas into .cache/luas and check out the go.mod commit.
+# Check out the Luas commit that go.mod names in .cache/luas. Clone Luas
+# first when .cache/luas is not a clone. Fetch when the commit is missing.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

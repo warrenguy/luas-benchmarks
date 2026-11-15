@@ -84,15 +84,14 @@ Write `RESULTS.md` from the downloaded run:
 - The fixed-rate scenarios port the send loop of the Aeron load test rig
   (`LoadTestRig` in aeron-io/benchmarks). Each message carries its scheduled
   send time, so the histogram does not hide coordinated omission.
-- Each fixed-rate cell warms up for 30 s, then sends for 60 s. The
-  scripts in aeron-io/benchmarks, such as
-  `scripts/aeron/remote-echo-single-host-benchmarks`, use the same
-  lengths.
-- The warmup sends at the cell rate. The aeron-io/benchmarks scripts
-  warm up at 25K msg/s.
-- The Java JIT compiles the hot path for the warmup rate. After a
-  25K msg/s warmup, a 12M msg/s cell makes Java recompile during the
-  measurement. The recompile stalls Java for over 80 ms.
+- Fixed-rate warmup compared with the scripts in aeron-io/benchmarks,
+  such as `scripts/aeron/remote-echo-single-host-benchmarks`:
+  - Lengths: both warm up for 30 s, then send for 60 s.
+  - Warmup rate: aeron-io/benchmarks warms up at 25K msg/s. These
+    benchmarks warm up at the cell rate.
+  - Reason: the Java JIT compiles the hot path for the warmup rate. A
+    12M msg/s cell after a 25K msg/s warmup makes Java recompile during
+    the measurement. The recompile stalls Java for over 80 ms.
 - Ping and pong run in one process on one driver.
   `remote-echo-single-host-benchmarks` runs `LoadTestRig` and `EchoNode`
   as two processes on one driver.

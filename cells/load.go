@@ -27,7 +27,7 @@ type Client struct {
 // Clients lists the clients in run order.
 var Clients = []Client{
 	{Name: LuasClient, Title: "Luas"},
-	{Name: "java", Title: "Java"},
+	{Name: "java", Title: "Aeron (Java)"},
 	{Name: "aerongo", Title: "aeron-go"},
 }
 

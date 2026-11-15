@@ -105,7 +105,7 @@ func parseOptions(args []string) (options, error) {
 	)
 	flags.StringVar(&opts.luasBinary, "luas", "", "luas client binary")
 	flags.StringVar(&opts.aerongoBinary, "aerongo", "", "aerongo client binary")
-	flags.StringVar(&opts.jar, "jar", "", "Java client jar")
+	flags.StringVar(&opts.jar, "jar", "", "Aeron (Java) client jar")
 	flags.StringVar(&opts.java, "java", "java", "java command")
 	flags.StringVar(&opts.javap, "javap", "javap", "javap command")
 	if err := flags.Parse(args); err != nil {
@@ -256,8 +256,8 @@ func driverProperties(propertiesText string, defines []string) (map[string]strin
 	return properties, nil
 }
 
-// collectClients returns the Luas, Java and aeron-go client versions, under
-// the client names of the results. collectClients also returns the Go
+// collectClients returns the Luas, Aeron (Java) and aeron-go client versions,
+// under the client names of the results. collectClients also returns the Go
 // toolchain that built both Go clients.
 //
 // Returns an error when a version does not read, or the two Go clients come

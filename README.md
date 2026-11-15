@@ -2,9 +2,9 @@
 
 Benchmarks that compare Aeron clients:
 
-- Luas (Go)
-- Java Aeron
-- aeron-go (Go)
+- [Luas](https://github.com/warrenguy/luas) (Go)
+- [Aeron](https://github.com/aeron-io/aeron) (Java)
+- [aeron-go](https://github.com/lirm/aeron-go) (Go)
 
 Every client runs the same scenarios against one C media driver. The
 driver, config, channels, stream ids, message sizes, counts, warmup, idle
@@ -82,10 +82,11 @@ Write `RESULTS.md` from the downloaded run:
   latency understates the tail under load. The fixed-rate scenarios measure
   latency under load.
 - The fixed-rate scenarios port the send loop of the Aeron load test rig
-  (`LoadTestRig` in aeron-io/benchmarks). Each message carries its scheduled
-  send time, so the histogram does not hide coordinated omission.
+  (`LoadTestRig` in [aeron-io/benchmarks](https://github.com/aeron-io/benchmarks)).
+  Each message carries its scheduled send time, so the histogram does not
+  hide coordinated omission.
 - Fixed-rate warmup compared with the scripts in aeron-io/benchmarks,
-  such as `scripts/aeron/remote-echo-single-host-benchmarks`:
+  such as [`scripts/aeron/remote-echo-single-host-benchmarks`](https://github.com/aeron-io/benchmarks/blob/master/scripts/aeron/remote-echo-single-host-benchmarks):
   - Lengths: both warm up for 30 s, then send for 60 s.
   - Warmup rate: aeron-io/benchmarks warms up at 25K msg/s. These
     benchmarks warm up at the cell rate.
@@ -112,7 +113,7 @@ Write `RESULTS.md` from the downloaded run:
   `Client.DoWork` once every 1024 polls, offers, or wait spins.
 - Java runs with Agrona bounds checks off, as the Aeron benchmarks do. The
   Go clients do not have a switch for their bounds checks.
-- Luas and Java pre-touch every page of a log buffer when they map it.
+- Luas and Aeron (Java) pre-touch every page of a log buffer when they map it.
   aeron-go takes a minor fault at its first write to each page.
 - Luas unlocks its hot goroutines from their pinned threads in the
   ping-pong, cluster, and fixed-rate scenarios. `LUAS_UNLOCKED=0` keeps

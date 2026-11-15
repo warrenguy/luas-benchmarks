@@ -6,7 +6,7 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 
 /**
- * Runs one benchmark scenario on the Java Aeron client.
+ * Runs one benchmark scenario on the Aeron (Java) client.
  * Usage: java -jar bench.jar &lt;scenario&gt; [flags]
  */
 public final class Main

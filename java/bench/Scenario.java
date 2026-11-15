@@ -55,8 +55,8 @@ record Scenario(
     static final String CLUSTER_EGRESS_CHANNEL = "aeron:udp?endpoint=127.0.0.1:20300";
 
     /**
-     * Fragment limit per egress poll of cluster-ping-pong. The Java, Luas and aeron-go cluster clients each fix it
-     * at 10.
+     * Fragment limit per egress poll of cluster-ping-pong. The Luas, Aeron (Java) and aeron-go cluster clients each
+     * fix it at 10.
      */
     static final int CLUSTER_EGRESS_FRAGMENT_LIMIT = 10;
 

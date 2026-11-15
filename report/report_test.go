@@ -154,7 +154,7 @@ var anchorLink = regexp.MustCompile(`\(#([^)]+)\)`)
 // under a title that names the instance. Its anchors count up after the
 // anchors of the sections before it.
 func TestWriteReportReadsEC2Run(t *testing.T) {
-	const title = "# Luas, Java and aeron-go comparison\n"
+	const title = "# Luas, Aeron (Java) and aeron-go comparison\n"
 	var plain bytes.Buffer
 	require.NoError(t, writeReport(&plain, fixtureRun))
 	body, found := strings.CutPrefix(plain.String(), title)
@@ -164,7 +164,7 @@ func TestWriteReportReadsEC2Run(t *testing.T) {
 			dir := writeEC2Run(t, tt.arches)
 			sections := make([]string, len(tt.headings))
 			for i, heading := range tt.headings {
-				section := "# Luas, Java and aeron-go comparison on " + heading + "\n" + body
+				section := "# Luas, Aeron (Java) and aeron-go comparison on " + heading + "\n" + body
 				if i > 0 {
 					section = anchorLink.ReplaceAllString(section, "(#${1}-"+strconv.Itoa(i)+")")
 				}
@@ -298,7 +298,7 @@ func TestWriteComparisonLatency(t *testing.T) {
 
 ### ipc-ping-pong, us
 
-| Publication | Send | Bytes | Percentile | Luas | Java | aeron-go |
+| Publication | Send | Bytes | Percentile | Luas | Aeron (Java) | aeron-go |
 |---|---|---:|---|---:|---:|---:|
 | concurrent | offer | 32 | p50 | 1.00 | 1.00 | - |
 | concurrent | offer | 32 | p90 | 1.00 | 3.00 | - |

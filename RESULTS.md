@@ -19,7 +19,7 @@ Instances: [amd64 m8azn.6xlarge](#amd64-m8azn6xlarge) | [Arm c9g.8xlarge](#arm-c
 - Isolated CPUs: 1-17
 - Driver: aeronmd 1.53.3, commit 377943bcb8+guilty
 - Luas: v0.0.0-20261110170533-5d8f75734b75, commit 5d8f75734b75
-- Java: 1.53.3, commit 377943bcb8
+- Aeron (Java): 1.53.3, commit 377943bcb8
 - aeron-go: v0.0.0-20240606170339-8b05ad14e456, commit 8b05ad14e456
 - Go: go1.26.4, GOMAXPROCS 9, GOGC unset, GOMEMLIMIT unset, GODEBUG unset
 - Luas layout: hot goroutines unlocked, yield every 5 ms, GOMAXPROCS 2, in cluster-ping-pong, ipc-fixed-rate, ipc-ping-pong, udp-fixed-rate, udp-ping-pong
@@ -29,7 +29,7 @@ Scenarios: [ipc-throughput](#ipc-throughput-mmsgs) | [udp-throughput](#udp-throu
 
 ### ipc-throughput, Mmsg/s
 
-| Publication | Send | Bytes | Luas | Java | aeron-go |
+| Publication | Send | Bytes | Luas | Aeron (Java) | aeron-go |
 |---|---|---:|---:|---:|---:|
 | concurrent | offer | 32 | 30.5 | 33.6 | 11.6 |
 | concurrent | offer | 256 | 27.6 | 26.4 | 6.39 |
@@ -52,7 +52,7 @@ Scenarios: [ipc-throughput](#ipc-throughput-mmsgs) | [udp-throughput](#udp-throu
 
 ### udp-throughput, Mmsg/s
 
-| Publication | Send | Bytes | Luas | Java | aeron-go |
+| Publication | Send | Bytes | Luas | Aeron (Java) | aeron-go |
 |---|---|---:|---:|---:|---:|
 | concurrent | offer | 32 | 18.5 | 18.8 | 15.2 |
 | concurrent | offer | 256 | 3.22 | 3.27 | 3.23 |
@@ -75,7 +75,7 @@ Scenarios: [ipc-throughput](#ipc-throughput-mmsgs) | [udp-throughput](#udp-throu
 
 ### ipc-ping-pong, us
 
-| Publication | Send | Bytes | Percentile | Luas | Java | aeron-go |
+| Publication | Send | Bytes | Percentile | Luas | Aeron (Java) | aeron-go |
 |---|---|---:|---|---:|---:|---:|
 | concurrent | offer | 32 | p50 | 0.170 | 0.170 | 0.270 |
 | concurrent | offer | 32 | p90 | 0.200 | 0.190 | 0.340 |
@@ -98,7 +98,7 @@ Scenarios: [ipc-throughput](#ipc-throughput-mmsgs) | [udp-throughput](#udp-throu
 
 ### udp-ping-pong, us
 
-| Publication | Send | Bytes | Percentile | Luas | Java | aeron-go |
+| Publication | Send | Bytes | Percentile | Luas | Aeron (Java) | aeron-go |
 |---|---|---:|---|---:|---:|---:|
 | concurrent | offer | 32 | p50 | 2.71 | 2.68 | 2.73 |
 | concurrent | offer | 32 | p90 | 2.95 | 2.94 | 2.96 |
@@ -121,7 +121,7 @@ Scenarios: [ipc-throughput](#ipc-throughput-mmsgs) | [udp-throughput](#udp-throu
 
 ### ipc-fixed-rate, us
 
-| Publication | Send | Bytes | Rate | Percentile | Luas | Java | aeron-go |
+| Publication | Send | Bytes | Rate | Percentile | Luas | Aeron (Java) | aeron-go |
 |---|---|---:|---:|---|---:|---:|---:|
 | exclusive | offer | 16384 | 25000 | p50 | 1.86 | 1.50 | 63.6 |
 | exclusive | offer | 16384 | 25000 | p90 | 2.13 | 1.72 | 67.9 |
@@ -168,7 +168,7 @@ Scenarios: [ipc-throughput](#ipc-throughput-mmsgs) | [udp-throughput](#udp-throu
 
 ### udp-fixed-rate, us
 
-| Publication | Send | Bytes | Rate | Percentile | Luas | Java | aeron-go |
+| Publication | Send | Bytes | Rate | Percentile | Luas | Aeron (Java) | aeron-go |
 |---|---|---:|---:|---|---:|---:|---:|
 | exclusive | try-claim | 32 | 501000 | p50 | 4.32 | 4.27 | 4.52 |
 | exclusive | try-claim | 32 | 501000 | p90 | 5.16 | 5.13 | 5.28 |
@@ -191,21 +191,21 @@ Scenarios: [ipc-throughput](#ipc-throughput-mmsgs) | [udp-throughput](#udp-throu
 
 ### archive-record, Mmsg/s
 
-| Publication | Send | Bytes | Luas | Java | aeron-go |
+| Publication | Send | Bytes | Luas | Aeron (Java) | aeron-go |
 |---|---|---:|---:|---:|---:|
 | concurrent | offer | 256 | 19.2 | 19.4 | 4.80 |
 | concurrent | offer | 4096 | 0.975 | 0.976 | 0.828 |
 
 ### archive-replay, Mmsg/s
 
-| Publication | Send | Bytes | Luas | Java | aeron-go |
+| Publication | Send | Bytes | Luas | Aeron (Java) | aeron-go |
 |---|---|---:|---:|---:|---:|
 | concurrent | offer | 256 | 48.8 | 48.2 | 48.8 |
 | concurrent | offer | 4096 | 3.43 | 3.39 | 0.168 |
 
 ### cluster-ping-pong, 1 member, us
 
-| Publication | Send | Bytes | Percentile | Luas | Java | aeron-go |
+| Publication | Send | Bytes | Percentile | Luas | Aeron (Java) | aeron-go |
 |---|---|---:|---|---:|---:|---:|
 | exclusive | offer | 32 | p50 | 6.09 | 6.10 | 6.09 |
 | exclusive | offer | 32 | p90 | 6.42 | 6.37 | 6.43 |
@@ -228,7 +228,7 @@ Scenarios: [ipc-throughput](#ipc-throughput-mmsgs) | [udp-throughput](#udp-throu
 
 ### cluster-ping-pong, 3 members, us
 
-| Publication | Send | Bytes | Percentile | Luas | Java | aeron-go |
+| Publication | Send | Bytes | Percentile | Luas | Aeron (Java) | aeron-go |
 |---|---|---:|---|---:|---:|---:|
 | exclusive | offer | 32 | p50 | 15.4 | 15.6 | 14.6 |
 | exclusive | offer | 32 | p90 | 17.3 | 16.9 | 16.8 |
@@ -259,7 +259,7 @@ Scenarios: [ipc-throughput](#ipc-throughput-mmsgs) | [udp-throughput](#udp-throu
 - Isolated CPUs: 1-17
 - Driver: aeronmd 1.53.3, commit 377943bcb8+guilty
 - Luas: v0.0.0-20261110170533-5d8f75734b75, commit 5d8f75734b75
-- Java: 1.53.3, commit 377943bcb8
+- Aeron (Java): 1.53.3, commit 377943bcb8
 - aeron-go: v0.0.0-20240606170339-8b05ad14e456, commit 8b05ad14e456
 - Go: go1.26.4, GOMAXPROCS 17, GOGC unset, GOMEMLIMIT unset, GODEBUG unset
 - Luas layout: hot goroutines unlocked, yield every 5 ms, GOMAXPROCS 2, in cluster-ping-pong, ipc-fixed-rate, ipc-ping-pong, udp-fixed-rate, udp-ping-pong
@@ -269,7 +269,7 @@ Scenarios: [ipc-throughput](#ipc-throughput-mmsgs-1) | [udp-throughput](#udp-thr
 
 ### ipc-throughput, Mmsg/s
 
-| Publication | Send | Bytes | Luas | Java | aeron-go |
+| Publication | Send | Bytes | Luas | Aeron (Java) | aeron-go |
 |---|---|---:|---:|---:|---:|
 | concurrent | offer | 32 | 8.46 | 8.58 | 6.49 |
 | concurrent | offer | 256 | 6.08 | 8.36 | 4.80 |
@@ -292,7 +292,7 @@ Scenarios: [ipc-throughput](#ipc-throughput-mmsgs-1) | [udp-throughput](#udp-thr
 
 ### udp-throughput, Mmsg/s
 
-| Publication | Send | Bytes | Luas | Java | aeron-go |
+| Publication | Send | Bytes | Luas | Aeron (Java) | aeron-go |
 |---|---|---:|---:|---:|---:|
 | concurrent | offer | 32 | 14.8 | 14.8 | 7.46 |
 | concurrent | offer | 256 | 2.77 | 2.75 | 2.75 |
@@ -315,7 +315,7 @@ Scenarios: [ipc-throughput](#ipc-throughput-mmsgs-1) | [udp-throughput](#udp-thr
 
 ### ipc-ping-pong, us
 
-| Publication | Send | Bytes | Percentile | Luas | Java | aeron-go |
+| Publication | Send | Bytes | Percentile | Luas | Aeron (Java) | aeron-go |
 |---|---|---:|---|---:|---:|---:|
 | concurrent | offer | 32 | p50 | 0.286 | 0.269 | 0.476 |
 | concurrent | offer | 32 | p90 | 0.317 | 0.306 | 0.526 |
@@ -338,7 +338,7 @@ Scenarios: [ipc-throughput](#ipc-throughput-mmsgs-1) | [udp-throughput](#udp-thr
 
 ### udp-ping-pong, us
 
-| Publication | Send | Bytes | Percentile | Luas | Java | aeron-go |
+| Publication | Send | Bytes | Percentile | Luas | Aeron (Java) | aeron-go |
 |---|---|---:|---|---:|---:|---:|
 | concurrent | offer | 32 | p50 | 4.38 | 4.31 | 4.46 |
 | concurrent | offer | 32 | p90 | 4.67 | 4.62 | 4.79 |
@@ -361,7 +361,7 @@ Scenarios: [ipc-throughput](#ipc-throughput-mmsgs-1) | [udp-throughput](#udp-thr
 
 ### ipc-fixed-rate, us
 
-| Publication | Send | Bytes | Rate | Percentile | Luas | Java | aeron-go |
+| Publication | Send | Bytes | Rate | Percentile | Luas | Aeron (Java) | aeron-go |
 |---|---|---:|---:|---|---:|---:|---:|
 | exclusive | offer | 16384 | 25000 | p50 | 5.29 | 4.50 | 10544480 ! |
 | exclusive | offer | 16384 | 25000 | p90 | 5.69 | 4.93 | 18958254 ! |
@@ -390,7 +390,7 @@ Scenarios: [ipc-throughput](#ipc-throughput-mmsgs-1) | [udp-throughput](#udp-thr
 
 ### udp-fixed-rate, us
 
-| Publication | Send | Bytes | Rate | Percentile | Luas | Java | aeron-go |
+| Publication | Send | Bytes | Rate | Percentile | Luas | Aeron (Java) | aeron-go |
 |---|---|---:|---:|---|---:|---:|---:|
 | exclusive | try-claim | 32 | 501000 | p50 | 6.63 | 6.66 | 6.92 |
 | exclusive | try-claim | 32 | 501000 | p90 | 8.75 | 8.80 | 9.10 |
@@ -413,21 +413,21 @@ Scenarios: [ipc-throughput](#ipc-throughput-mmsgs-1) | [udp-throughput](#udp-thr
 
 ### archive-record, Mmsg/s
 
-| Publication | Send | Bytes | Luas | Java | aeron-go |
+| Publication | Send | Bytes | Luas | Aeron (Java) | aeron-go |
 |---|---|---:|---:|---:|---:|
 | concurrent | offer | 256 | 9.73 | 9.81 | 4.65 |
 | concurrent | offer | 4096 | 0.750 | 0.744 | 0.508 |
 
 ### archive-replay, Mmsg/s
 
-| Publication | Send | Bytes | Luas | Java | aeron-go |
+| Publication | Send | Bytes | Luas | Aeron (Java) | aeron-go |
 |---|---|---:|---:|---:|---:|
 | concurrent | offer | 256 | 38.3 | 38.5 | 38.6 |
 | concurrent | offer | 4096 | 2.84 | 2.85 | 0.0741 |
 
 ### cluster-ping-pong, 1 member, us
 
-| Publication | Send | Bytes | Percentile | Luas | Java | aeron-go |
+| Publication | Send | Bytes | Percentile | Luas | Aeron (Java) | aeron-go |
 |---|---|---:|---|---:|---:|---:|
 | exclusive | offer | 32 | p50 | 6.96 | 7.01 | 7.01 |
 | exclusive | offer | 32 | p90 | 7.25 | 7.28 | 7.31 |
@@ -450,7 +450,7 @@ Scenarios: [ipc-throughput](#ipc-throughput-mmsgs-1) | [udp-throughput](#udp-thr
 
 ### cluster-ping-pong, 3 members, us
 
-| Publication | Send | Bytes | Percentile | Luas | Java | aeron-go |
+| Publication | Send | Bytes | Percentile | Luas | Aeron (Java) | aeron-go |
 |---|---|---:|---|---:|---:|---:|
 | exclusive | offer | 32 | p50 | 17.7 | 17.8 | 17.8 |
 | exclusive | offer | 32 | p90 | 19.0 | 19.2 | 19.1 |

@@ -6,8 +6,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
- * One run of one scenario variant on the Java client. Mirrors bench.Result. Java results carry
- * jvm_runtime and never go_runtime.
+ * One run of one scenario variant on the Aeron (Java) client. Mirrors bench.Result. Aeron (Java)
+ * results carry jvm_runtime and never go_runtime.
  *
  * @param scenario   scenario name.
  * @param variant    variant label.

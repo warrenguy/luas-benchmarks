@@ -63,8 +63,8 @@ const (
 	ClusterEgressChannel = "aeron:udp?endpoint=127.0.0.1:20300"
 
 	// ClusterEgressFragmentLimit is the fragment limit per egress poll of
-	// cluster-ping-pong. The Java, Luas and aeron-go cluster clients each fix
-	// it at 10.
+	// cluster-ping-pong. The Luas, Aeron (Java) and aeron-go cluster clients
+	// each fix it at 10.
 	ClusterEgressFragmentLimit = 10
 
 	// ClusterMemberPortBase is the first port of member 0. Member i takes the

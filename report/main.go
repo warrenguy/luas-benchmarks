@@ -117,7 +117,7 @@ func writeSectionReport(b *strings.Builder, s cells.Section, anchors headingAnch
 	}
 	expectedRuns := scenarioRuns(rows)
 
-	b.WriteString("# Luas, Java and aeron-go comparison")
+	b.WriteString("# Luas, Aeron (Java) and aeron-go comparison")
 	if s.Label != "" {
 		b.WriteString(" on " + s.Label)
 	}

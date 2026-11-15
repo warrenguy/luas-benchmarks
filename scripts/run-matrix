@@ -46,8 +46,8 @@
 #                           below
 #                         - ping-pong: the client defaults
 #     ARCHIVE_BYTES       bytes each archive cell records or replays per run
-#                         (default 8 GiB, about 2 s at the Luas and Java
-#                         rates)
+#                         (default 8 GiB, about 2 s at the Luas and
+#                         Aeron (Java) rates)
 #                         - Each archive cell sends ARCHIVE_BYTES / length
 #                           messages, rounded down.
 #                         - The warmup sends the same count.
@@ -212,9 +212,9 @@ CLUSTER_LENGTHS=(32 256 1024)
 CLUSTER_MEMBERS=(1 3)
 
 # IPC_MESSAGES maps an ipc-throughput message length to the messages each
-# run measures: about 2 s at the fastest amd64 variant of the Luas and Java
-# rates. IPC_MESSAGES_DIVISOR scales the count down on a slower host. The
-# warmup sends the same count.
+# run measures: about 2 s at the fastest amd64 variant of the Luas and
+# Aeron (Java) rates. IPC_MESSAGES_DIVISOR scales the count down on a slower
+# host. The warmup sends the same count.
 declare -A IPC_MESSAGES=(
 	[32]=250000000
 	[256]=120000000
@@ -225,7 +225,7 @@ declare -A IPC_MESSAGES=(
 )
 
 # AERONGO_IPC_MESSAGES caps aeron-go over IPC, where it runs far below the
-# Luas and Java rates at every length.
+# Luas and Aeron (Java) rates at every length.
 declare -A AERONGO_IPC_MESSAGES=(
 	[32]=25000000
 	[256]=15000000
@@ -258,7 +258,7 @@ declare -A UDP_MESSAGES=(
 )
 
 # AERONGO_MESSAGES caps aeron-go at the lengths where it runs far below the
-# Luas and Java rates. Its rate there varies under 1% between runs.
+# Luas and Aeron (Java) rates. Its rate there varies under 1% between runs.
 declare -A AERONGO_MESSAGES=(
 	[4096]=1000000
 	[16384]=200000
@@ -394,8 +394,8 @@ DRIVER_DEFINES=(
 # - A fixed-rate cell adds rate=<msg/s>.
 #
 # Publication and send method:
-# - Cluster cells use the exclusive ingress publication, the Java and Luas
-#   cluster client default.
+# - Cluster cells use the exclusive ingress publication, the Luas and
+#   Aeron (Java) cluster client default.
 # - Cluster cells use Offer: aeron-go AeronCluster does not have TryClaim.
 # - Reference-rate cells use the exclusive publication and TryClaim, as the
 #   echo client of the Aeron load test rig does.

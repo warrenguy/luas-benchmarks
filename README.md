@@ -134,6 +134,10 @@ Why Luas unlocks:
   CPU every 5 ms. A goroutine off its CPU moves back.
   `cluster-ping-pong` does not check.
 
+## Contributing
+
+Contribution policy: [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## License
 
 MIT. See [LICENSE](LICENSE).

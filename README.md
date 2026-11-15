@@ -107,8 +107,11 @@ Write `RESULTS.md` from the downloaded run:
   takes an `*atomic.Buffer`, an offset, and a length.
 - aeron-go `AddExclusivePublication` returns the same `*Publication` type as
   `AddPublication`.
-- aeron-go measures fewer messages over IPC at every length, and at 4096
-  bytes and above over UDP. `scripts/run-matrix` holds the counts.
+- In `ipc-throughput`, and in `udp-throughput` at 4096 bytes and above,
+  aeron-go sends fewer messages per run than the other clients. It runs
+  far slower, so the same count would make each run many times longer.
+  Each client still reports its rate in messages per second.
+  `scripts/run-matrix` holds the counts.
 - Luas does not start a conductor thread. Each hot goroutine calls
   `Client.DoWork` once every 1024 polls, offers, or wait spins.
 - Java runs with Agrona bounds checks off, as the Aeron benchmarks do. The
